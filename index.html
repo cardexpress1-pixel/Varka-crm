@@ -435,6 +435,38 @@
   .reactor-card.active { box-shadow: 0 0 0 2.5px var(--accent), 0 6px 18px rgba(0,0,0,.18); animation: none !important; }
   /* нажатие («обжатие») работает и для уже выбранной карточки */
   .reactor-card.active:active { transform: translateY(3px) scale(0.96); box-shadow: 0 0 0 2.5px var(--accent), 0 1px 4px rgba(0,0,0,.25); filter: brightness(0.94); transition: transform .05s, box-shadow .05s, filter .05s; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     РОЛЬ «ОПЕРАТОР ВАРКИ» — упрощённый мобильный рабочий терминал.
+     Активируется классом body.role-brewop (см. enterApp). Скрываем всё лишнее:
+     боковое меню, бегущую строку, выбор даты, переключатель темы; реакторы —
+     вертикальная сетка 2 колонки; компактная шапка без наложения времени.
+     ═══════════════════════════════════════════════════════════════════════ */
+  body.role-brewop #sidebar-edge-btn { display: none !important; }
+  body.role-brewop #alarm-ticker { display: none !important; }
+  body.role-brewop #warshchik-date-nav { display: none !important; }
+  body.role-brewop #warshchik-date-label { display: none !important; }
+  body.role-brewop #theme-toggle-btn { display: none !important; }
+  body.role-brewop #active-badge { display: none !important; }
+  /* время — компактно справа, не поверх имени */
+  body.role-brewop #nav-clock { position: static; left: auto; transform: none; padding: 4px 10px; gap: 6px; }
+  body.role-brewop #nav-clock-time { font-size: 12px; }
+  body.role-brewop .nav { gap: 8px; }
+  body.role-brewop #nav-clock { margin-left: auto; order: 3; }
+  body.role-brewop .nav-right { margin-left: 8px; padding-left: 0; order: 4; }
+  /* кнопка «Выйти» как аккуратная иконка */
+  body.role-brewop .logout-label { display: none; }
+  body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; width: 34px; height: 34px; padding: 0; color: var(--text2); }
+  .logout-icon { display: none; }
+  body.role-brewop .logout-icon { display: block; }
+  /* реакторы — вертикальная сетка под телефон, все 7 видны без карусели */
+  body.role-brewop #reactor-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; overflow: visible; flex-wrap: wrap; justify-content: stretch; padding-bottom: 4px; }
+  body.role-brewop #reactor-tabs .reactor-card { width: 100% !important; flex: none !important; min-height: 92px; }
+  body.role-brewop #reactor-tabs .reactor-card .reactor-card-name { font-size: 22px; }
+  /* заголовок ровно, без съезжания */
+  body.role-brewop #warshchik-list .cal-header { align-items: center; margin-bottom: 10px; }
+  body.role-brewop #page-title-warshchik { font-size: 20px; }
+
   .reactor-card-icon { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
   .reactor-card-name { font-size: 30px; font-weight: 900; letter-spacing: .01em; line-height: 1; margin: 4px 0; }
   .reactor-card-status { display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -1194,7 +1226,10 @@
     <div class="user-chip">
       <span class="role-pill" id="user-role-pill"></span>
     </div>
-    <button class="logout-btn" onclick="doLogout()">Выйти</button>
+    <button class="logout-btn" onclick="doLogout()" title="Выйти">
+      <svg class="logout-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <span class="logout-label">Выйти</span>
+    </button>
   </div>
 </nav>
 
@@ -2312,6 +2347,11 @@ function applyStateMigrations() {
     // (их пишет startBrewTimer/stopBrewTimer). getBatchStage опирается на status, поэтому
     // старые партии (active/done) корректно остаются в brewing/brewed без доп. миграции.
   });
+
+  // ── Реакторов должно быть 7 (Р-1..Р-7). Добавляем недостающие, не удаляя кастомные. ──
+  ['Р-1','Р-2','Р-3','Р-4','Р-5','Р-6','Р-7'].forEach(r => {
+    if (!state.reactors.includes(r)) state.reactors.push(r);
+  });
 }
 
 async function loadState() {
@@ -2357,8 +2397,15 @@ function getRoleById(id) { return state.roles.find(r => r.id === id); }
 
 // Светлая/тёмная тема — общая настройка устройства (не привязана к роли),
 // сохраняется в state и применяется сразу при загрузке, до входа в систему.
+// Является ли текущий вошедший — выделенным оператором варки (единственная вкладка warshchik).
+function isBrewOperatorRole() {
+  const role = currentUser ? getRoleById(currentUser.roleId) : null;
+  return !!(role && !role.fullAccess && role.tabs && role.tabs.length === 1 && role.tabs[0] === 'warshchik');
+}
+
 function applyTheme() {
-  const isLight = state.theme === 'light';
+  // Для терминала оператора варки — всегда светлая тема (читаемость в цеху).
+  const isLight = isBrewOperatorRole() ? true : (state.theme === 'light');
   document.body.classList.toggle('theme-light', isLight);
   const btn = document.getElementById('theme-toggle-btn');
   if (btn) btn.textContent = isLight ? '☀️' : '🌙';
@@ -2679,6 +2726,7 @@ function confirmResetRolesToDefault() {
 function doLogout() {
   logActivity('Выход из системы', { target: currentUser ? currentUser.roleId : '' });
   currentUser = null;
+  document.body.classList.remove('role-brewop');
   try { sessionStorage.removeItem('varka_session'); } catch(e) {}
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -2777,6 +2825,9 @@ function enterApp() {
 
   const role = getRoleById(currentUser.roleId);
   if (!role) { doLogout(); return; }
+
+  // Упрощённый мобильный режим для выделенного оператора варки
+  document.body.classList.toggle('role-brewop', isBrewOperatorRole());
 
   const pill = document.getElementById('user-role-pill');
   pill.textContent = role.login ? `${role.name} ${role.login}` : role.name;
@@ -3467,6 +3518,15 @@ function renderAlarmTicker(alarms) {
     if (sb) { sb.style.top = offset + 'px'; sb.style.height = 'calc(100vh - ' + offset + 'px)'; }
     const main = document.querySelector('.app-main');
     if (main) { main.style.height = 'calc(100vh - ' + offset + 'px)'; }
+  }
+
+  // Терминал оператора варки — без бегущей строки, она мешает рабочему экрану.
+  if (isBrewOperatorRole()) {
+    ticker.style.display = 'none';
+    ticker.classList.remove('has-critical');
+    if (_tickerAnim) { cancelAnimationFrame(_tickerAnim); _tickerAnim = null; }
+    adjustSidebar(false);
+    return;
   }
 
   if (!alarms.length) {
@@ -4681,7 +4741,9 @@ function renderWarshchikBatches() {
   const today = fmtDate(new Date());
 
   const currentRoleForNav = getRoleById(currentUser.roleId);
-  const showDateNav = !currentRoleForNav || currentRoleForNav.fields.dateNavWarshchik !== false;
+  // Оператор варки — без выбора даты вообще (только сегодня). Для остальных — по настройке роли.
+  const showDateNav = isBrewOperatorRole() ? false
+    : (!currentRoleForNav || currentRoleForNav.fields.dateNavWarshchik !== false);
   const dateNavEl = document.getElementById('warshchik-date-nav');
   if (dateNavEl) dateNavEl.style.display = showDateNav ? 'flex' : 'none';
   // если выбор даты скрыт админом, принудительно возвращаем обычный режим — нельзя
@@ -4755,9 +4817,23 @@ function renderWarshchikBatches() {
   }
 
   if (!batches.length) {
-    el.innerHTML = state.warshchikViewingHistory
-      ? `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h10"/></svg></div><div class="empty-title">Нет варок за этот день</div></div>`
-      : `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg></div><div class="empty-title">На сегодня всё сварено</div><div>Новые варки появятся в день варки</div></div>`;
+    if (state.warshchikViewingHistory) {
+      el.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h10"/></svg></div><div class="empty-title">Нет варок за этот день</div></div>`;
+      return;
+    }
+    // Различаем «всё сварено» и «не назначено»: смотрим, были ли вообще задачи на сегодня
+    // (включая уже сваренные) для этого оператора. Активных нет — иначе мы бы сюда не попали.
+    let todays = state.batches.filter(b =>
+      b.brewDate <= today && b.sentToBrewing &&
+      b.status !== 'deleted' && b.status !== 'cancelled'
+    );
+    if (isDedicatedBrewOp) {
+      todays = todays.filter(b => !b.assignedBrewingOperatorRoleId || b.assignedBrewingOperatorRoleId === currentUser.roleId);
+    }
+    const hadDoneToday = todays.some(b => b.status === 'done');
+    el.innerHTML = hadDoneToday
+      ? `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg></div><div class="empty-title">На сегодня всё сварено</div></div>`
+      : `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-title">На сегодня варки не назначены</div></div>`;
     return;
   }
   el.innerHTML = headerNote + batches.map(b => warshchikBatchCard(b, !state.warshchikViewingHistory && b.brewDate < today)).join('');
