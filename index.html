@@ -7028,10 +7028,11 @@ document.addEventListener('click', function(e) {
   // (чтобы можно было раскрывать карточки партий, не теряя выбранную стадию).
   if (_pmStage) {
     const tabs = document.getElementById('pm-stage-tabs');
-    const content = document.getElementById('pm-content');
     const inTabs = tabs && tabs.contains(e.target);
-    const inContent = content && content.contains(e.target);
-    if (!inTabs && !inContent) {
+    // Клик по карточке партии (раскрытие/форма) — выбор НЕ снимаем.
+    // Клик по пустому месту, по «Пусто» или между карточками — снимаем.
+    const onBatchCard = e.target.closest && e.target.closest('#pm-content .card, #pm-content .batch-card');
+    if (!inTabs && !onBatchCard) {
       _pmStage = '';
       try { sessionStorage.setItem('pmStage', ''); } catch(_) {}
       document.querySelectorAll('#pm-stage-tabs .reactor-card').forEach(b => b.classList.remove('active'));
