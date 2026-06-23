@@ -2309,22 +2309,25 @@ async function loadState() {
     try {
       const snap = await db.collection('varka').doc('state').get();
       if (snap.exists) {
-        // Firestore — единственный источник истины.
-        // localStorage не участвует в принятии решений, только обновляется как кэш.
         state = { ...state, ...snap.data() };
         try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
         fromFirestore = true;
+        _stateLoadedFromFirestore = true;
+        console.info('[Firestore] состояние загружено');
+      } else {
+        console.warn('[Firestore] документ пуст — ждём данных, в Firestore ничего не пишем');
+        _stateLoadedFromFirestore = false;
       }
     } catch(err) {
-      console.error('[Firestore] loadState — fallback на localStorage:', err);
+      console.error('[Firestore] loadState — Firebase недоступен:', err);
+      _firebaseError = true;
     }
   }
 
   if (!fromFirestore) {
-    // Firebase недоступен или пустой — используем localStorage только как резерв
     try {
       const s = localStorage.getItem('varka_state_v2');
-      if (s) state = { ...state, ...JSON.parse(s) };
+      if (s) { state = { ...state, ...JSON.parse(s) }; console.info('[Cache] загружено из localStorage'); }
     } catch(e) {}
   }
 
@@ -2411,6 +2414,15 @@ function logJournalEvent(opts) {
 }
 
 function saveState() {
+  // Защита: не писать пустой state в Firestore при инициализации
+  if (!_stateLoadedFromFirestore && db) {
+    const hasData = (state.batches && state.batches.length > 0) ||
+                    (state.recipes && state.recipes.length > 0);
+    if (!hasData) {
+      console.warn('[Firestore] saveState заблокирован — state пуст и не загружен из Firestore');
+      return;
+    }
+  }
   // localStorage — быстрый офлайн-кэш
   try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
   // Firestore — основное общее хранилище (дебаунс 600 мс)
@@ -3048,6 +3060,8 @@ let db = null;
 let _fbReady = false;
 let _fbUid = null;
 let _snapshotIgnoreUntil = 0;
+let _stateLoadedFromFirestore = false;
+let _firebaseError = false;
 // ════════════════════════════════════════════════════════════════════════════
 // MASTER RENDER
 // ════════════════════════════════════════════════════════════════════════════
@@ -6817,6 +6831,16 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
   await loadState();
   applyTheme();
   document.getElementById('loading-screen').style.display = 'none';
+
+  // Баннер если Firebase недоступен
+  if (_firebaseError || !_fbReady) {
+    const banner = document.createElement('div');
+    banner.id = 'firebase-error-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;text-align:center;padding:10px 16px;font-size:13px;font-weight:600;';
+    banner.innerHTML = '⚠️ Firebase недоступен — данные не синхронизируются. Работаете офлайн. Обновите страницу или проверьте соединение.';
+    document.body.prepend(banner);
+  }
+
   if (tryRestoreSession()) {
     enterApp();
   } else {
