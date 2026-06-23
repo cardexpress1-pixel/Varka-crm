@@ -2074,7 +2074,7 @@ let state = {
   wpHistoryCollapsed: true,  // история по неделям свёрнута по умолчанию
   navTabsOrder: [],   // кастомный порядок пунктов бокового меню (id вкладок); пусто = порядок по умолчанию (ALL_TABS)
   navTabsLabels: {},  // кастомные названия пунктов бокового меню { id: 'новое название' }; пусто = название по умолчанию
-  pmStage: '',   // текущая выбранная вкладка-стадия в «Управлении производством»
+  // pmStage НЕ хранится в state/Firestore — это локальный UI-выбор (см. _pmStage + sessionStorage)
   pmDate: null,        // выбранная дата в «Управлении производством»
   pmShowAll: true,      // показывать все даты (без фильтра) в «Управлении производством»
   journalActiveTab: 'events', // активная вкладка операционного журнала
@@ -2299,6 +2299,16 @@ function applyStateMigrations() {
     }
     if (b.commentForWarshchik === undefined) b.commentForWarshchik = '';
     if (b.commentForPouring === undefined) b.commentForPouring = '';
+
+    // ── Миграция стадии «Назначена» (assigned) и нового потока варки ──
+    // assignedToBrewing — гейт выхода из очереди (заменяет смысл sentToBrewing).
+    // Старые партии: если уже передавались в варку (sentToBrewing) — считаем назначенными.
+    if (b.assignedToBrewing === undefined) b.assignedToBrewing = !!b.sentToBrewing;
+    if (b.assignedBrewingOperatorRoleId === undefined) b.assignedBrewingOperatorRoleId = null;
+    if (b.assignedBrewingOperatorName === undefined)   b.assignedBrewingOperatorName = null;
+    // Метки старта/финиша варки используют СУЩЕСТВУЮЩИЕ поля brewStartedAt/brewEndedAt
+    // (их пишет startBrewTimer/stopBrewTimer). getBatchStage опирается на status, поэтому
+    // старые партии (active/done) корректно остаются в brewing/brewed без доп. миграции.
   });
 }
 
@@ -2369,10 +2379,50 @@ function canActOnPage(pageId) {
   return role.tabs.length === 1 && role.tabs[0] === pageId;
 }
 
+// Проверка прав на конкретное ДЕЙСТВИЕ (не только видимость кнопки). Вызывается
+// внутри action-функций, чтобы заблокировать действие даже если кнопка как-то показана.
+//   Админ (fullAccess) — всё.
+//   Главный оператор (несколько вкладок, включая production) — назначение варки,
+//     передача в розлив, мониторинг.
+//   Оператор варки (единственная вкладка warshchik) — старт/финиш своих варок.
+//   Оператор розлива (единственная вкладка intake) — старт/стоп/факт розлива.
+function canDo(action) {
+  const role = getRoleById(currentUser ? currentUser.roleId : null);
+  if (!role) return false;
+  if (role.fullAccess) return true;
+
+  const single = (role.tabs && role.tabs.length === 1) ? role.tabs[0] : null;
+  const isMainOp = role.tabs && role.tabs.length > 1 && role.tabs.includes('production');
+  const isBrewOp = single === 'warshchik';
+  const isPourOp = single === 'intake';
+
+  switch (action) {
+    case 'assignBrewing':
+    case 'sendToPouring':
+    case 'monitorProduction':
+      return isMainOp;
+    case 'startBrewing':
+    case 'finishBrewing':
+    case 'reportBrewProblem':
+      return isBrewOp;
+    case 'startPouring':
+    case 'stopPouring':
+    case 'saveIntakeQty':
+      return isPourOp;
+    default:
+      return false;
+  }
+}
+
 // Все роли, выделенные конкретно под участок розлива (единственная вкладка — intake) —
 // это и есть «операторы розлива», у каждого свой логин, без отдельного списка имён.
 function getIntakeOperatorRoles() {
   return state.roles.filter(r => r.tabs && r.tabs.length === 1 && r.tabs[0] === 'intake');
+}
+
+// Роли участка варки (единственная вкладка — warshchik) — это «операторы варки».
+function getBrewingOperatorRoles() {
+  return state.roles.filter(r => r.tabs && r.tabs.length === 1 && r.tabs[0] === 'warshchik');
 }
 
 // Один оператор не может одновременно отвечать за две разные линии. Возвращает
@@ -2721,7 +2771,7 @@ function enterApp() {
   applySidebarState();
   applyTheme();
   applyBranding();
-  state.pmStage = '';
+  clearPmStage();
 
   const role = getRoleById(currentUser.roleId);
   if (!role) { doLogout(); return; }
@@ -2752,7 +2802,7 @@ function showPage(id, btn) {
     state.warshchikViewingHistory = false;
     state.warshchikViewDate = fmtDate(new Date());
   }
-  if (id !== 'production') { state.pmStage = ''; }
+  if (id !== 'production') { clearPmStage(); }
   if (id === 'calendar') renderCalendar();
   if (id === 'weekplan') renderWeekPlan();
   if (id === 'admin') closeAdminSection();
@@ -2830,9 +2880,19 @@ function mkBatch(opts) {
 function getBatchStage(b) {
   if (b.status === 'cancelled') return 'cancelled';
   if (b.status === 'deleted') return 'deleted';
-  if (!b.sentToBrewing) return 'queued';
-  if (b.status === 'planned' || b.status === 'active') return 'brewing';
-  // дальше b.status === 'done'
+
+  // гейт выхода из очереди: assignedToBrewing (новое) ИЛИ sentToBrewing (старое, backward-compat)
+  const assigned = b.assignedToBrewing || b.sentToBrewing;
+  if (!assigned) return 'queued';
+
+  // партия назначена, но варщик ещё не нажал «Начать варку»
+  // (статус не active/done И нет фактической метки старта brewStartedAt)
+  if (b.status !== 'active' && b.status !== 'done' && !b.brewStartedAt) return 'assigned';
+
+  // варка идёт: статус active (или есть метка старта), но ещё не завершена
+  if (b.status !== 'done' && !b.brewEndedAt) return 'brewing';
+
+  // варка завершена (status done или есть метка финиша)
   if (!b.sentToPouring) return 'brewed';
   if (!b.pouringEndedAt) return 'pouring'; // передано в розлив — независимо от того, нажал ли оператор «Начать» физически
   if (b.factQty === null || b.factQty === undefined) return 'poured';
@@ -3065,6 +3125,23 @@ let _fbUid = null;
 let _snapshotIgnoreUntil = 0;
 let _stateLoadedFromFirestore = false;
 let _firebaseError = false;
+
+// ── pmStage: ЛОКАЛЬНЫЙ UI-выбор карточки-стадии в «Управлении производством» ──
+// Намеренно НЕ в state и НЕ в Firestore: это выбор конкретного устройства,
+// не должен синхронизироваться между пользователями через onSnapshot.
+let _pmStage = sessionStorage.getItem('pmStage') || '';
+function getPmStage() { return _pmStage; }
+function setPmStage(stage) {
+  // toggle: повторный клик по активной карточке снимает фильтр
+  _pmStage = (_pmStage === stage) ? '' : stage;
+  try { sessionStorage.setItem('pmStage', _pmStage); } catch(e) {}
+  renderProductionManagement();
+}
+function clearPmStage() {
+  _pmStage = '';
+  try { sessionStorage.setItem('pmStage', ''); } catch(e) {}
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // MASTER RENDER
 // ════════════════════════════════════════════════════════════════════════════
@@ -3473,8 +3550,8 @@ function goToAlarmPage(pageId, pmStage) {
   if (tabBtn) {
     showPage(pageId, tabBtn);
     if (pageId === 'production' && pmStage) {
-      state.pmStage = pmStage;
-      saveState();
+      _pmStage = pmStage;
+      try { sessionStorage.setItem('pmStage', _pmStage); } catch(e) {}
       renderProductionManagement();
     }
     return;
@@ -3682,7 +3759,7 @@ function renderBiAnalytics() {
 // УПРАВЛЕНИЕ ПРОИЗВОДСТВОМ — назначение линии розлива готовым партиям
 // ════════════════════════════════════════════════════════════════════════════
 const PM_STAGES = [
-  ['queued','В очереди'], ['brewing','Идёт варка'], ['brewed','Сварено'],
+  ['queued','В очереди'], ['assigned','Назначена'], ['brewing','Идёт варка'], ['brewed','Сварено'],
   ['pouring','Идёт розлив'], ['poured','Разлито'], ['finished','Готово']
 ];
 
@@ -3692,17 +3769,18 @@ const PM_STAGES = [
 function pmGetDateFilteredBatches(stage) {
   const live = state.batches.filter(b => b.status !== 'deleted' && b.status !== 'cancelled');
   const withStage = live.filter(b => getBatchStage(b) === stage);
-  // Стадии «В очереди» и «Варка завершена» требуют действия — показываем ВСЕ
-  // даты независимо от фильтра, чтобы партии не "терялись" при просмотре другого дня.
-  if (state.pmShowAll || stage === 'queued' || stage === 'brewed') return withStage;
-  const useDateField = (stage === 'pouring' || stage === 'poured' || stage === 'finished') ? 'pouringDate' : 'brewDate';
+  // Активное производство НЕ должно пропадать из-за фильтра по дате — показываем ВСЕ
+  // даты для: очередь, назначена, идёт варка, сварено, идёт розлив.
+  // Фильтр по дате применяется только к истории: разлито (poured) и готово (finished).
+  const ALWAYS_SHOW = ['queued','assigned','brewing','brewed','pouring'];
+  if (state.pmShowAll || ALWAYS_SHOW.includes(stage)) return withStage;
+  const useDateField = (stage === 'poured' || stage === 'finished') ? 'pouringDate' : 'brewDate';
   return withStage.filter(b => (b[useDateField] || b.brewDate) === state.pmDate);
 }
 
 function renderProductionManagement() {
   const tabsEl = document.getElementById('pm-stage-tabs');
   if (!tabsEl) return;
-  if (state.pmStage === null || state.pmStage === undefined) state.pmStage = '';
 if (!state.pmDate) state.pmDate = fmtDate(new Date());
   if (state.pmShowAll === undefined) state.pmShowAll = true;
 
@@ -3712,13 +3790,13 @@ if (!state.pmDate) state.pmDate = fmtDate(new Date());
   const dateLabelEl = document.getElementById('pm-date-label');
   if (dateLabelEl) dateLabelEl.textContent = state.pmShowAll ? 'Показаны все даты' : fmtDateHuman(state.pmDate);
 
-  const PM_STAGE_COLORS = { queued:'orange', brewing:'orange', brewed:'blue', pouring:'green', poured:'blue', finished:'white' };
-  const PM_STAGE_SHORT = { queued:'Очередь', brewing:'Варится', brewed:'Сварено', pouring:'Розлив', poured:'Разлито', finished:'Готово' };
-  const PM_STAGE_EMPTY_LBL = { queued:'Нет в очереди', brewing:'Не варится', brewed:'Нет сваренных', pouring:'Нет в розливе', poured:'Нет разлитых', finished:'Нет готовых' };
+  const PM_STAGE_COLORS = { queued:'orange', assigned:'red', brewing:'orange', brewed:'blue', pouring:'green', poured:'blue', finished:'white' };
+  const PM_STAGE_SHORT = { queued:'Очередь', assigned:'Назначена', brewing:'Варится', brewed:'Сварено', pouring:'Розлив', poured:'Разлито', finished:'Готово' };
+  const PM_STAGE_EMPTY_LBL = { queued:'Нет в очереди', assigned:'Нет назначенных', brewing:'Не варится', brewed:'Нет сваренных', pouring:'Нет в розливе', poured:'Нет разлитых', finished:'Нет готовых' };
   tabsEl.innerHTML = PM_STAGES.map(([id]) => {
     const count = pmGetDateFilteredBatches(id).length;
     const color = count > 0 ? PM_STAGE_COLORS[id] : 'white';
-    return `<button class="reactor-card rcard-${color} ${state.pmStage===id?'active':''}" data-stage="${id}" onclick="pmSetStage('${id}',this,event)" style="position:relative;">
+    return `<button class="reactor-card rcard-${color} ${_pmStage===id?'active':''}" data-stage="${id}" onclick="pmSetStage('${id}',this,event)" style="position:relative;">
       ${count > 0 ? `<span class="rtab-count-badge">${count}</span>` : ''}
       <div class="reactor-card-icon">${getPMStageIcon(id, count > 0)}</div>
       <div class="reactor-card-name" style="font-size:18px;">${PM_STAGE_SHORT[id]}</div>
@@ -3736,6 +3814,8 @@ function getPMStageIcon(id, hasItems) {
   const s = 'width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
   // В очереди — пауза/ожидание
   if (id === 'queued') return `<svg ${s} class="rci rci-pause"><circle cx="12" cy="12" r="9"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/></svg>`;
+  // Назначена — пользователь с галочкой (задача закреплена за оператором варки)
+  if (id === 'assigned') return `<svg ${s} class="rci"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>`;
   if (id === 'brewing') return `<svg ${s} class="rci rci-tank"><path d="M6 3h12l1 4H5L6 3z"/><rect x="4" y="7" width="16" height="11" rx="2"/><path d="M4 12h16"/><circle cx="9" cy="15.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="15.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="15.5" r="1" fill="currentColor" stroke="none"/><path d="M8 18v3m8-3v3"/></svg>`;
   if (id === 'brewed') return `<svg ${s} class="rci"><circle cx="12" cy="12" r="9"/><path class="rci-clock-hand" d="M12 7v5l3 2"/></svg>`;
   if (id === 'pouring') return `<svg ${s} class="rci rci-bottles"><rect x="1" y="3" width="22" height="2" rx="1"/><line x1="6" y1="5" x2="6" y2="8"/><line x1="12" y1="5" x2="12" y2="8"/><line x1="18" y1="5" x2="18" y2="8"/><path d="M4.5 8h3v2.5l.5.5v7h-4v-7l.5-.5V8z"/><path d="M10.5 8h3v2.5l.5.5v7h-4v-7l.5-.5V8z"/><path d="M16.5 8h3v2.5l.5.5v7h-4v-7l.5-.5V8z"/><rect x="1" y="19" width="22" height="3" rx="1.5"/><circle cx="5" cy="20.5" r="1.5"/><circle cx="19" cy="20.5" r="1.5"/></svg>`;
@@ -3744,13 +3824,9 @@ function getPMStageIcon(id, hasItems) {
   return `<svg ${s} class="rci"><circle cx="12" cy="12" r="9"/></svg>`;
 }
 
-let _pmStageClickHandled = false;
-
 function pmSetStage(stage, btn, ev) {
-  _pmStageClickHandled = true;
-  state.pmStage = stage;
-  saveState();
-  renderProductionManagement();
+  if (ev) ev.stopPropagation();
+  setPmStage(stage); // toggle + sessionStorage + re-render
 }
 
 function pmShiftDay(delta) {
@@ -3781,19 +3857,20 @@ function pmShowAllDates() {
 function renderPmContent() {
   const el = document.getElementById('pm-content');
   if (!el) return;
-  if (!state.pmStage || state.pmStage === 'none' || state.pmStage === '') {
+  if (!_pmStage || _pmStage === 'none' || _pmStage === '') {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 10h18M3 14h12M3 18h8"/><polyline points="17 14 21 17 17 20"/></svg></div><div class="empty-title">Выберите этап</div><div>Нажмите на карточку выше</div></div>`;
     return;
   }
-  const batches = pmGetDateFilteredBatches(state.pmStage).sort((a,b) => new Date(a.brewDate) - new Date(b.brewDate));
+  const batches = pmGetDateFilteredBatches(_pmStage).sort((a,b) => new Date(a.brewDate) - new Date(b.brewDate));
 
   if (!batches.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-title">Пусто</div><div>Нет партий на этой вкладке${state.pmShowAll ? '' : ' за выбранную дату'}</div></div>`;
     return;
   }
 
-  if (state.pmStage === 'queued') { el.innerHTML = batches.map(pmQueuedCard).join(''); return; }
-  if (state.pmStage === 'brewed') { el.innerHTML = batches.map(pmBrewedCard).join(''); return; }
+  if (_pmStage === 'queued')   { el.innerHTML = batches.map(pmQueuedCard).join(''); return; }
+  if (_pmStage === 'assigned') { el.innerHTML = batches.map(pmAssignedCard).join(''); return; }
+  if (_pmStage === 'brewed')   { el.innerHTML = batches.map(pmBrewedCard).join(''); return; }
   el.innerHTML = batches.map(b => pmMonitorCard(b)).join('');
 }
 
@@ -3817,13 +3894,14 @@ function pmStageBadge(stage) {
 // Карточка на вкладке «В очереди» — свёрнута по умолчанию, разворачивается по клику.
 // Внутри: дата варки, реактор, заранее линия и комментарий варщику перед передачей.
 function pmQueuedCard(b) {
-  const operatorRoles = getIntakeOperatorRoles();
-  const assignedRole = b.assignedOperatorRoleId ? getRoleById(b.assignedOperatorRoleId) : null;
+  const pourRoles = getIntakeOperatorRoles();
+  const brewRoles = getBrewingOperatorRoles();
+  const assignedPour = b.assignedOperatorRoleId ? getRoleById(b.assignedOperatorRoleId) : null;
   return `<div class="card" style="padding:0; overflow:hidden;">
     <div style="padding:14px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px;" onclick="togglePmCard('${b.id}')">
       <div style="min-width:0;">
         <div style="font-size:15px; font-weight:700;">${b.name} <span style="color:var(--text3); font-size:12px; font-weight:500;">${b.id}</span></div>
-        <div class="batch-meta" style="margin-top:4px;"><span>${fmtDateHuman(b.brewDate)}</span><span>${b.reactor}</span><span>${b.planQty} шт</span>${b.pouringLine ? `<span>${b.pouringLine}</span>` : ''}${assignedRole ? `<span>${assignedRole.login}</span>` : ''}</div>
+        <div class="batch-meta" style="margin-top:4px;"><span>${fmtDateHuman(b.brewDate)}</span><span>${b.reactor}</span><span>${b.planQty} шт</span>${b.pouringLine ? `<span>${b.pouringLine}</span>` : ''}${assignedPour ? `<span>${assignedPour.login}</span>` : ''}</div>
       </div>
       <span id="pm-card-chevron-${b.id}" style="font-size:12px; color:var(--text2); flex-shrink:0;">▾</span>
     </div>
@@ -3838,21 +3916,28 @@ function pmQueuedCard(b) {
           <select id="pmq-reactor-${b.id}">${state.reactors.map(r=>`<option value="${r}" ${r===b.reactor?'selected':''}>${r}</option>`).join('')}</select>
         </div>
       </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label>Оператор варки <span style="color:var(--warn);">*</span></label>
+        <select id="pmq-brewop-${b.id}" onchange="pmCheckQueuedReady('${b.id}')">
+          <option value="">— выбрать оператора варки —</option>
+          ${brewRoles.map(r=>`<option value="${r.id}" ${r.id===b.assignedBrewingOperatorRoleId?'selected':''}>${r.login}</option>`).join('')}
+        </select>
+        ${!brewRoles.length ? `<div class="field-hidden-note" style="margin-top:4px;">Нет ролей-операторов варки — заведите роль с единственной вкладкой «Участок варки» в Админ → Роли.</div>` : ''}
+      </div>
       <div class="grid-2" style="margin-top:10px;">
         <div class="form-group" style="margin-bottom:0;">
-          <label>Линия розлива</label>
-          <select id="pmq-line-${b.id}" onchange="pmCheckQueuedReady('${b.id}')">
-            <option value="">— выбрать линию —</option>
+          <label>Линия розлива (заранее, необязательно)</label>
+          <select id="pmq-line-${b.id}">
+            <option value="">— не выбрано —</option>
             ${state.pouringLines.map(l=>`<option value="${l}" ${l===b.pouringLine?'selected':''}>${l}</option>`).join('')}
           </select>
         </div>
         <div class="form-group" style="margin-bottom:0;">
-          <label>Оператор розлива</label>
-          <select id="pmq-operator-${b.id}" onchange="pmCheckQueuedReady('${b.id}')">
-            <option value="">— выбрать оператора —</option>
-            ${operatorRoles.map(r=>`<option value="${r.id}" ${r.id===b.assignedOperatorRoleId?'selected':''}>${r.login}</option>`).join('')}
+          <label>Оператор розлива (заранее, необязательно)</label>
+          <select id="pmq-operator-${b.id}">
+            <option value="">— не выбрано —</option>
+            ${pourRoles.map(r=>`<option value="${r.id}" ${r.id===b.assignedOperatorRoleId?'selected':''}>${r.login}</option>`).join('')}
           </select>
-          ${!operatorRoles.length ? `<div class="field-hidden-note" style="margin-top:4px;">Нет ролей-операторов розлива — заведите роль с единственной вкладкой «Участок розлива» в Админ → Роли.</div>` : ''}
         </div>
       </div>
       <div class="form-group" style="margin-top:10px;">
@@ -3863,29 +3948,32 @@ function pmQueuedCard(b) {
         <label>Комментарий для оператора розлива</label>
         <textarea id="pmq-pouring-comment-${b.id}" rows="2" placeholder="Необязательно">${b.commentForPouring||''}</textarea>
       </div>
-      <button id="pmq-send-btn-${b.id}" class="btn btn-primary btn-full" style="margin-top:6px;" ${(b.pouringLine && b.assignedOperatorRoleId)?'':'disabled'} onclick="sendToBrewing('${b.id}')">Передать в варку</button>
+      <button id="pmq-send-btn-${b.id}" class="btn btn-primary btn-full" style="margin-top:6px;" ${b.assignedBrewingOperatorRoleId?'':'disabled'} onclick="assignBrewing('${b.id}')">Назначить варку</button>
     </div>
   </div>`;
 }
 
-// Карточка на вкладке «Идёт варка» — мониторинг + единственное доступное действие:
-// заранее назначить/поменять линию розлива (без кнопки «Передать», просто сохранение).
-// Кнопка "Передать в варку" активна только если выбраны и линия, и оператор —
-// оба поля теперь обязательны, без них сохранить нельзя.
+// Кнопка «Назначить варку» активна только если выбран оператор варки (обязательное поле).
 function pmCheckQueuedReady(batchId) {
-  const lineInput = document.getElementById(`pmq-line-${batchId}`);
-  const operatorInput = document.getElementById(`pmq-operator-${batchId}`);
+  const brewOp = document.getElementById(`pmq-brewop-${batchId}`);
   const btn = document.getElementById(`pmq-send-btn-${batchId}`);
   if (!btn) return;
-  btn.disabled = !(lineInput && lineInput.value && operatorInput && operatorInput.value);
+  btn.disabled = !(brewOp && brewOp.value);
 }
 
-function sendToBrewing(batchId) {
+// Главный оператор назначает варку из очереди: задаёт дату, реактор, ОПЕРАТОРА ВАРКИ
+// (обязательно), опционально заранее — линию/оператора розлива и комментарии.
+// Результат: партия выходит из очереди и переходит в стадию «Назначена» (assigned),
+// появляется на телефоне у назначенного оператора варки. Статус остаётся 'planned'
+// до тех пор, пока варщик сам не нажмёт «Начать варку».
+function assignBrewing(batchId) {
+  if (!canDo('assignBrewing')) { showToast('Недостаточно прав для назначения варки'); return; }
   const b = state.batches.find(x => x.id === batchId);
   if (!b) return;
 
   const dateInput = document.getElementById(`pmq-date-${batchId}`);
   const reactorInput = document.getElementById(`pmq-reactor-${batchId}`);
+  const brewOpInput = document.getElementById(`pmq-brewop-${batchId}`);
   const lineInput = document.getElementById(`pmq-line-${batchId}`);
   const operatorInput = document.getElementById(`pmq-operator-${batchId}`);
   const commentInput = document.getElementById(`pmq-comment-${batchId}`);
@@ -3893,58 +3981,70 @@ function sendToBrewing(batchId) {
 
   const newDate = dateInput ? dateInput.value : b.brewDate;
   const newReactor = reactorInput ? reactorInput.value : b.reactor;
+  const newBrewOpRoleId = brewOpInput ? (brewOpInput.value || null) : b.assignedBrewingOperatorRoleId;
   const newLine = lineInput ? lineInput.value : '';
   const newOperatorRoleId = operatorInput ? (operatorInput.value || null) : b.assignedOperatorRoleId;
   const newComment = commentInput ? commentInput.value : (b.commentForWarshchik || '');
   const newPouringComment = pouringCommentInput ? pouringCommentInput.value : (b.commentForPouring || '');
 
-  const effectiveLine = newLine || b.pouringLine;
-  if (!effectiveLine) { showToast('Назначьте линию розлива перед передачей в варку'); return; }
-  if (!newOperatorRoleId) { showToast('Назначьте оператора розлива перед передачей в варку'); return; }
-
-  const changed = (newDate !== b.brewDate) || (newReactor !== b.reactor) ||
-    (newLine && newLine !== (b.pouringLine || '')) || (newOperatorRoleId !== b.assignedOperatorRoleId) ||
-    (newComment !== (b.commentForWarshchik || '')) || (newPouringComment !== (b.commentForPouring || ''));
+  // Оператор варки — единственное обязательное поле при назначении
+  if (!newBrewOpRoleId) { showToast('Выберите оператора варки'); return; }
+  const brewRole = getRoleById(newBrewOpRoleId);
+  const brewOpName = brewRole ? brewRole.login : null;
 
   if (newDate !== b.brewDate || newReactor !== b.reactor) {
     const check = checkConflict(newReactor, newDate, b.brewHours || 0, b.id);
     if (check.conflict) {
-      const ok = confirm(`Реактор ${newReactor} на ${fmtDateHuman(newDate)} уже загружен на ${check.load}ч из ${state.workdayHours}ч. Эта варка (${b.brewHours}ч) превысит лимит. Передать всё равно?`);
+      const ok = confirm(`Реактор ${newReactor} на ${fmtDateHuman(newDate)} уже загружен на ${check.load}ч из ${state.workdayHours}ч. Эта варка (${b.brewHours}ч) превысит лимит. Назначить всё равно?`);
       if (!ok) return;
     }
   }
 
-  const oldDate = b.brewDate, oldReactor = b.reactor;
-
-  if (newDate !== b.brewDate) logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Управление производством', page: 'production', pmStage: 'queued',
-    text: `Главный оператор изменил дату варки партии ${b.id}: с ${fmtDateHuman(oldDate)} на ${fmtDateHuman(newDate)}.` });
-  if (newReactor !== b.reactor) logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Управление производством', page: 'production', pmStage: 'queued',
-    text: `Главный оператор изменил реактор партии ${b.id}: с ${oldReactor} на ${newReactor}.` });
-  if (newLine && newLine !== (b.pouringLine || '')) logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Управление производством', page: 'production', pmStage: 'queued',
-    text: `Главный оператор назначил линию розлива «${newLine}» для партии ${b.id} заранее.` });
-  if (newOperatorRoleId !== b.assignedOperatorRoleId) {
-    const role = newOperatorRoleId ? getRoleById(newOperatorRoleId) : null;
-    logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Управление производством', page: 'production', pmStage: 'queued',
-      text: role ? `Главный оператор назначил оператора «${role.login}» на партию ${b.id} заранее.` : `Главный оператор снял назначение оператора с партии ${b.id}.` });
-  }
-  if (newComment !== (b.commentForWarshchik || '')) logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Управление производством', page: 'production', pmStage: 'brewing',
-    text: `Главный оператор оставил комментарий для варщика по партии ${b.id}.` });
-  if (newPouringComment !== (b.commentForPouring || '')) logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Управление производством', page: 'production', pmStage: 'brewed',
-    text: `Главный оператор оставил комментарий для оператора розлива по партии ${b.id} заранее.` });
-
   b.brewDate = newDate;
   b.reactor = newReactor;
+  b.assignedBrewingOperatorRoleId = newBrewOpRoleId;
+  b.assignedBrewingOperatorName = brewOpName;
   if (newLine) b.pouringLine = newLine;
   b.assignedOperatorRoleId = newOperatorRoleId;
   b.commentForWarshchik = newComment;
   b.commentForPouring = newPouringComment;
-  b.sentToBrewing = true;
-  logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Управление производством', page: 'production', pmStage: 'brewing',
-    text: changed ? `Главный оператор передал партию ${b.id} в варку.` : `Главный оператор передал партию ${b.id} в варку без изменений.` });
-  logActivity('Партия передана в варку', { target: b.id, after: { reactor: b.reactor, brewDate: b.brewDate, line: b.pouringLine } });
+  // гейт выхода из очереди → стадия «Назначена». Статус остаётся planned, метки старта нет.
+  b.assignedToBrewing = true;
+  b.sentToBrewing = true; // backward-compat для старых проверок
+
+  logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Управление производством', page: 'production', pmStage: 'assigned',
+    text: `Главный оператор назначил варку партии ${b.id} оператору «${brewOpName}». Реактор ${b.reactor}, дата ${fmtDateHuman(b.brewDate)}.` });
+  logActivity('Варка назначена', { target: b.id, after: {
+    product: b.name, reactor: b.reactor, brewDate: b.brewDate,
+    brewingOperator: brewOpName, brewingOperatorRoleId: newBrewOpRoleId, line: b.pouringLine || null
+  } });
   saveState();
   render();
-  showToast(changed ? `${batchId} передана в варку` : `${batchId} передана в варку без изменений`);
+  showToast(`${batchId} назначена · оператор «${brewOpName}»`);
+}
+
+// Карточка на вкладке «Назначена» — мониторинг для главного оператора. Партия уже
+// назначена оператору варки и ждёт, пока он нажмёт «Начать варку». Только просмотр.
+function pmAssignedCard(b) {
+  const brewName = b.assignedBrewingOperatorName
+    || (b.assignedBrewingOperatorRoleId ? (getRoleById(b.assignedBrewingOperatorRoleId)||{}).login : null)
+    || '—';
+  return `<div class="card">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+      <div style="min-width:0;">
+        <div style="font-size:15px; font-weight:700;">${b.name} <span style="color:var(--text3); font-size:12px; font-weight:500;">${b.id}</span></div>
+        <div class="batch-meta" style="margin-top:4px;">
+          <span>${fmtDateHuman(b.brewDate)}</span>
+          <span>Реактор: <strong>${b.reactor}</strong></span>
+          <span>План: ${b.planQty} шт</span>
+          <span>Оператор варки: <strong>${brewName}</strong></span>
+          ${b.pouringLine ? `<span>${b.pouringLine}</span>` : ''}
+        </div>
+        ${b.commentForWarshchik ? `<div class="note" style="margin-top:6px;">📝 Варщику: ${b.commentForWarshchik}</div>` : ''}
+      </div>
+      <span style="flex-shrink:0; font-size:12px; font-weight:700; color:var(--warn); padding:3px 10px; border-radius:10px; background:var(--warn-bg, rgba(220,80,40,.12));">Ждёт старта</span>
+    </div>
+  </div>`;
 }
 
 // Карточка на вкладке «Варка завершена» — линия розлива обязательна перед передачей.
@@ -3989,6 +4089,7 @@ function pmBrewedCard(b) {
 }
 
 function sendToPouring(batchId) {
+  if (!canDo('sendToPouring')) { showToast('Недостаточно прав для передачи в розлив'); return; }
   const b = state.batches.find(x => x.id === batchId);
   if (!b) return;
 
@@ -4635,6 +4736,16 @@ function renderWarshchikBatches() {
       }).join('');
   }
 
+  // Оператор варки видит только СВОИ назначенные задачи (assignedBrewingOperatorRoleId).
+  // Старые/неназначенные партии (null) остаются видны, чтобы не потерялись.
+  // Админ и наблюдатели (несколько вкладок / fullAccess) видят всё.
+  const viewerRole = getRoleById(currentUser.roleId);
+  const isDedicatedBrewOp = viewerRole && !viewerRole.fullAccess
+    && viewerRole.tabs && viewerRole.tabs.length === 1 && viewerRole.tabs[0] === 'warshchik';
+  if (isDedicatedBrewOp) {
+    batches = batches.filter(b => !b.assignedBrewingOperatorRoleId || b.assignedBrewingOperatorRoleId === currentUser.roleId);
+  }
+
   if (!batches.length) {
     el.innerHTML = state.warshchikViewingHistory
       ? `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h10"/></svg></div><div class="empty-title">Нет варок за этот день</div></div>`
@@ -4963,7 +5074,7 @@ function renderPouringLineInfoPanel() {
 }
 
 function startPouring(batchId) {
-  if (!canActOnPage('intake')) return;
+  if (!canDo('startPouring')) { showToast('Недостаточно прав'); return; }
   const b = state.batches.find(x => x.id === batchId);
   if (!b) return;
   const role = getRoleById(currentUser.roleId);
@@ -4976,7 +5087,7 @@ function startPouring(batchId) {
 }
 
 function stopPouring(batchId) {
-  if (!canActOnPage('intake')) return;
+  if (!canDo('stopPouring')) { showToast('Недостаточно прав'); return; }
   const b = state.batches.find(x => x.id === batchId);
   if (!b) return;
   b.pouringEndedAt = new Date().toISOString();
@@ -4989,7 +5100,7 @@ function stopPouring(batchId) {
 }
 
 function saveIntakeQty(batchId) {
-  if (!canActOnPage('intake')) return;
+  if (!canDo('saveIntakeQty')) { showToast('Недостаточно прав'); return; }
   const input = document.getElementById(`intake-qty-${batchId}`);
   const qty = parseInt(input.value);
   if (!qty || qty <= 0) { showToast('Введите фактический выход (шт)'); return; }
@@ -6503,9 +6614,11 @@ function renderZakladkaDetail(b) {
   const isRunning = b.status === 'active' && b.brewStartedAt;
   let startBtnHtml;
   if (canAct) {
-    startBtnHtml = isRunning
+    const mainBtn = isRunning
       ? `<button class="btn btn-danger btn-full" onclick="stopBrewTimer('${b.id}')">Завершить варку</button>`
       : `<button class="btn btn-primary btn-full" onclick="startBrewTimer('${b.id}')">Начать варку</button>`;
+    startBtnHtml = `${mainBtn}
+      <button class="btn btn-full" style="margin-top:8px; background:transparent; border:1px solid var(--warn); color:var(--warn);" onclick="reportBrewProblem('${b.id}')">⚠ Проблема</button>`;
   } else {
     // режим наблюдения — без кнопок, только статус
     const statusText = b.status === 'done' ? 'Варка завершена' : isRunning ? 'Варка идёт' : 'В очереди на варку';
@@ -6602,22 +6715,35 @@ function updateBrewTimerDisplay(b) {
 }
 
 function startBrewTimer(id) {
-  if (!canActOnPage('warshchik')) return;
+  if (!canDo('startBrewing')) { showToast('Недостаточно прав'); return; }
   const b = state.batches.find(x=>x.id===id);
   if (!b) return;
+  // оператор варки может стартовать только свою назначенную задачу
+  if (b.assignedBrewingOperatorRoleId && b.assignedBrewingOperatorRoleId !== currentUser.roleId
+      && !((getRoleById(currentUser.roleId)||{}).fullAccess)) {
+    showToast('Эта варка назначена другому оператору'); return;
+  }
   b.status = 'active';
   b.brewStartedAt = new Date().toISOString();
+  logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewing',
+    text: `Оператор варки начал варку партии ${b.id} на реакторе ${b.reactor}.` });
+  logActivity('Варка начата', { target: b.id, after: { product: b.name, reactor: b.reactor, startedAt: b.brewStartedAt } });
   saveState();
   renderZakladkaDetail(b);
   showToast(`Варка ${id} началась`);
 }
 
 function stopBrewTimer(id) {
-  if (!canActOnPage('warshchik')) return;
+  if (!canDo('finishBrewing')) { showToast('Недостаточно прав'); return; }
   const b = state.batches.find(x=>x.id===id);
   if (!b) return;
+  if (b.assignedBrewingOperatorRoleId && b.assignedBrewingOperatorRoleId !== currentUser.roleId
+      && !((getRoleById(currentUser.roleId)||{}).fullAccess)) {
+    showToast('Эта варка назначена другому оператору'); return;
+  }
   b.brewEndedAt = new Date().toISOString();
   b.status = 'done';
+  logActivity('Варка завершена', { target: b.id, after: { product: b.name, reactor: b.reactor, endedAt: b.brewEndedAt } });
   b.sentToBrewing = true; // гарантия: партия попадёт в 'brewed', а не застрянет в 'queued'
 
   // Если линия розлива уже назначена главным оператором — автоматически передаём
@@ -6636,6 +6762,21 @@ function stopBrewTimer(id) {
   render();
   showToast(b.pouringLine ? `Варка ${id} завершена — передана в розлив (${b.pouringLine})` : `Варка ${id} завершена`);
   backToList();
+}
+
+// Оператор варки сообщает о проблеме — пишется в журнал событий и activityLog.
+function reportBrewProblem(id) {
+  if (!canDo('reportBrewProblem')) { showToast('Недостаточно прав'); return; }
+  const b = state.batches.find(x=>x.id===id);
+  if (!b) return;
+  const text = prompt(`Опишите проблему по партии ${b.id} (${b.name}):`, '');
+  if (text === null) return;
+  const desc = text.trim() || 'без описания';
+  logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewing',
+    text: `⚠ Оператор варки сообщил о проблеме по партии ${b.id}: ${desc}` });
+  logActivity('Проблема на варке', { target: b.id, details: { product: b.name, reactor: b.reactor, problem: desc } });
+  saveState();
+  showToast('Проблема зафиксирована в журнале');
 }
 
 function toggleIngredient(i) {
@@ -6864,12 +7005,6 @@ document.addEventListener('click', function(e) {
       renderReactorInfoPanel();
     }
   }
-  if (state.pmStage && !_pmStageClickHandled) {
-    state.pmStage = '';
-    saveState();
-    renderProductionManagement();
-  }
-  _pmStageClickHandled = false;
   if (state.filterPouringLine && state.filterPouringLine !== 'all') {
     const tabs = document.getElementById('intake-line-tabs');
     const panel = document.getElementById('pouring-line-info-panel');
@@ -6911,21 +7046,15 @@ window.addEventListener('storage', function(e) {
     if (!s) return;
     // Сохраняем локальные UI-состояния этой вкладки (фильтры, даты, открытые вкладки)
     const keep = {
-      pmStage: state.pmStage, pmDate: state.pmDate, pmShowAll: state.pmShowAll,
+      pmDate: state.pmDate, pmShowAll: state.pmShowAll,
       filterReactor: state.filterReactor, filterPouringLine: state.filterPouringLine,
       intakeDate: state.intakeDate, intakeShowAll: state.intakeShowAll,
       warshchikViewDate: state.warshchikViewDate, warshchikViewingHistory: state.warshchikViewingHistory,
       currentBatchId: state.currentBatchId, theme: state.theme
     };
     state = { ...s, ...keep };
-    // Запускаем миграцию для новых партий из другой вкладки
-    state.batches.forEach(b => {
-      if (b.sentToBrewing === undefined) b.sentToBrewing = true;
-      if (b.sentToPouring === undefined) b.sentToPouring = (b.status === 'done');
-      if ((b.pouringDate === undefined || b.pouringDate === null) && b.status === 'done') b.pouringDate = b.brewDate;
-      if (b.commentForWarshchik === undefined) b.commentForWarshchik = '';
-      if (b.commentForPouring === undefined) b.commentForPouring = '';
-    });
+    // Единая миграция (включая новые поля assigned-стадии) для партий из другой вкладки
+    applyStateMigrations();
   } catch(e2) {}
   render();
 });
