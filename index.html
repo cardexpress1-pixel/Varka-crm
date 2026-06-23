@@ -448,12 +448,10 @@
   body.role-brewop #warshchik-date-label { display: none !important; }
   body.role-brewop #theme-toggle-btn { display: none !important; }
   body.role-brewop #active-badge { display: none !important; }
-  /* время — компактно справа, не поверх имени */
-  body.role-brewop #nav-clock { position: static; left: auto; transform: none; padding: 4px 10px; gap: 6px; }
-  body.role-brewop #nav-clock-time { font-size: 12px; }
+  /* время полностью убираем у оператора варки */
+  body.role-brewop #nav-clock { display: none !important; }
   body.role-brewop .nav { gap: 8px; }
-  body.role-brewop #nav-clock { margin-left: auto; order: 3; }
-  body.role-brewop .nav-right { margin-left: 8px; padding-left: 0; order: 4; }
+  body.role-brewop .nav-right { margin-left: auto; padding-left: 0; }
   /* кнопка «Выйти» как аккуратная иконка */
   body.role-brewop .logout-label { display: none; }
   body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; width: 34px; height: 34px; padding: 0; color: var(--text2); }
@@ -4787,14 +4785,21 @@ function renderWarshchikBatches() {
       : '';
   }
 
-  // reactor tabs — вся плашка реактора закрашивается/пульсирует цветом статуса,
-  // сверху статичный кружок-счётчик с количеством варок на сегодня
+  // Оператор варки видит только СВОИ задачи (assignedBrewingOperatorRoleId).
+  const viewerRole = getRoleById(currentUser.roleId);
+  const isDedicatedBrewOp = viewerRole && !viewerRole.fullAccess
+    && viewerRole.tabs && viewerRole.tabs.length === 1 && viewerRole.tabs[0] === 'warshchik';
+
+  // reactor tabs — вся плашка реактора закрашивается/пульсирует цветом статуса.
+  // Для оператора варки: статус смысловой (Свободен/Назначена/Варится/Сварено),
+  // а тап по реактору ОТКРЫВАЕТ задание (а не фильтрует список).
   const tabsEl = document.getElementById('reactor-tabs');
   if (tabsEl) {
     tabsEl.innerHTML = state.reactors.map((r,i) => {
-        const ind = reactorIndicatorState(r);
+        const ind = isDedicatedBrewOp ? brewReactorState(r) : reactorIndicatorState(r);
         const countToday = state.batches.filter(b => b.reactor === r && b.brewDate === today && b.status !== 'cancelled' && b.status !== 'deleted').length;
-        return `<button class="reactor-card rcard-${ind.color} ${state.filterReactor===String(i+1)?'active':''}" onclick="filterReactor('${i+1}',this,event)" style="position:relative;">
+        const onClick = isDedicatedBrewOp ? `openReactorTask('${r}')` : `filterReactor('${i+1}',this,event)`;
+        return `<button class="reactor-card rcard-${ind.color} ${(!isDedicatedBrewOp && state.filterReactor===String(i+1))?'active':''}" onclick="${onClick}" style="position:relative;">
           ${countToday > 0 ? `<span class="rtab-count-badge">${countToday}</span>` : ''}
           <div class="reactor-card-icon">${getReactorCardIcon(ind.color)}</div>
           <div class="reactor-card-name">${r}</div>
@@ -4806,12 +4811,6 @@ function renderWarshchikBatches() {
       }).join('');
   }
 
-  // Оператор варки видит только СВОИ назначенные задачи (assignedBrewingOperatorRoleId).
-  // Старые/неназначенные партии (null) остаются видны, чтобы не потерялись.
-  // Админ и наблюдатели (несколько вкладок / fullAccess) видят всё.
-  const viewerRole = getRoleById(currentUser.roleId);
-  const isDedicatedBrewOp = viewerRole && !viewerRole.fullAccess
-    && viewerRole.tabs && viewerRole.tabs.length === 1 && viewerRole.tabs[0] === 'warshchik';
   if (isDedicatedBrewOp) {
     batches = batches.filter(b => !b.assignedBrewingOperatorRoleId || b.assignedBrewingOperatorRoleId === currentUser.roleId);
   }
@@ -4830,7 +4829,9 @@ function renderWarshchikBatches() {
     if (isDedicatedBrewOp) {
       todays = todays.filter(b => !b.assignedBrewingOperatorRoleId || b.assignedBrewingOperatorRoleId === currentUser.roleId);
     }
-    const hadDoneToday = todays.some(b => b.status === 'done');
+    // «всё сварено» — только если реально сварили партию сегодня (дата варки = сегодня),
+    // иначе старые завершённые партии давали бы ложное «всё сварено» по умолчанию.
+    const hadDoneToday = todays.some(b => b.status === 'done' && b.brewDate === today);
     el.innerHTML = hadDoneToday
       ? `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg></div><div class="empty-title">На сегодня всё сварено</div></div>`
       : `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-title">На сегодня варки не назначены</div></div>`;
@@ -4884,6 +4885,31 @@ function warshchikBatchCard(b, isOverdue) {
       <div class="status-label s-${b.status}">${statusLabel(b.status)}</div>
     </div>
   </div>`;
+}
+
+// Смысловой статус реактора для терминала оператора варки. В отличие от
+// reactorIndicatorState не показывает розливных стадий — только то, что важно варщику.
+// Возвращает { color, text, batch } — batch это задача для открытия по тапу.
+function brewReactorState(reactorName) {
+  const today = fmtDate(new Date());
+  const rel = state.batches.filter(b =>
+    b.reactor === reactorName && b.status !== 'cancelled' && b.status !== 'deleted' &&
+    (b.assignedToBrewing || b.sentToBrewing) && b.brewDate <= today
+  );
+  const brewing = rel.find(b => b.status === 'active');
+  if (brewing) return { color: 'orange', text: 'Варится', batch: brewing };
+  const assigned = rel.find(b => b.status !== 'done' && b.status !== 'active');
+  if (assigned) return { color: 'red', text: 'Назначена', batch: assigned };
+  const brewed = rel.find(b => b.status === 'done' && getBatchStage(b) === 'brewed' && b.brewDate === today);
+  if (brewed) return { color: 'blue', text: 'Сварено', batch: brewed };
+  return { color: 'white', text: 'Свободен', batch: null };
+}
+
+// Тап по карточке реактора в терминале варщика — открыть задание на нём.
+function openReactorTask(reactorName) {
+  const st = brewReactorState(reactorName);
+  if (st.batch) { openZakladka(st.batch.id); return; }
+  showToast(`Нет назначенной варки на ${reactorName}`);
 }
 
 function getReactorCardIcon(color) {
@@ -6696,8 +6722,12 @@ function renderZakladkaDetail(b) {
   const pct = total ? Math.round(done/total*100) : 0;
 
   const isRunning = b.status === 'active' && b.brewStartedAt;
+  const isDoneBrew = b.status === 'done';
   let startBtnHtml;
-  if (canAct) {
+  if (isDoneBrew) {
+    // Сваренная партия — без действий, только статус (brewed → «Варка завершена»)
+    startBtnHtml = `<div style="font-size:15px; font-weight:800; color:var(--accent2);">✓ Варка завершена</div>`;
+  } else if (canAct) {
     const mainBtn = isRunning
       ? `<button class="btn btn-danger btn-full" onclick="stopBrewTimer('${b.id}')">Завершить варку</button>`
       : `<button class="btn btn-primary btn-full" onclick="startBrewTimer('${b.id}')">Начать варку</button>`;
