@@ -2427,6 +2427,9 @@ function saveState() {
   try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
   // Firestore — основное общее хранилище (дебаунс 600 мс)
   if (!db) return;
+  // Сразу блокируем onSnapshot чтобы он не перезаписал локальные изменения
+  // до того как дебаунс отработает (иначе UI сбрасывается через ~200ms)
+  _snapshotIgnoreUntil = Date.now() + 3600;
   if (saveState._t) clearTimeout(saveState._t);
   saveState._t = setTimeout(() => {
     _snapshotIgnoreUntil = Date.now() + 3000;
