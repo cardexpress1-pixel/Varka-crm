@@ -3135,7 +3135,13 @@ function setPmStage(stage) {
   // toggle: повторный клик по активной карточке снимает фильтр
   _pmStage = (_pmStage === stage) ? '' : stage;
   try { sessionStorage.setItem('pmStage', _pmStage); } catch(e) {}
-  renderProductionManagement();
+  // НЕ перестраиваем всю панель карточек (иначе кнопка удаляется из DOM прямо
+  // во время своего же клика → гонка, выбор срабатывает «через раз»).
+  // Достаточно переключить класс active на существующих кнопках и перерисовать список.
+  document.querySelectorAll('#pm-stage-tabs .reactor-card').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.stage === _pmStage && _pmStage !== '');
+  });
+  renderPmContent();
 }
 function clearPmStage() {
   _pmStage = '';
