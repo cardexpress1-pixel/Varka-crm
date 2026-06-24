@@ -457,12 +457,13 @@
   body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; width: 44px; height: 44px; padding: 0; color: var(--text2); }
   .logout-icon { display: none; }
   body.role-brewop .logout-icon { display: block; }
-  /* реакторы — вертикальная сетка под телефон, все 7 видны без карусели */
-  body.role-brewop #reactor-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; overflow: visible; flex-wrap: wrap; justify-content: stretch; padding-bottom: 4px; width: 100%; box-sizing: border-box; }
-  body.role-brewop #reactor-tabs .reactor-card { width: 100% !important; flex: none !important; min-height: 100px; box-sizing: border-box; overflow: hidden; }
-  body.role-brewop #reactor-tabs .reactor-card .reactor-card-name { font-size: 24px; }
-  /* эффект нажатия не выходит за пределы карточки */
-  body.role-brewop #reactor-tabs .reactor-card .rtab-count-badge { position: absolute; top: 6px; right: 6px; z-index: 2; }
+  /* оператор варки — без сетки реакторов, сразу список задач */
+  body.role-brewop #reactor-tabs { display: none !important; }
+  body.role-brewop #reactor-info-panel { display: none !important; }
+  body.role-brewop #brewop-free-panel { display: none !important; }
+  /* адаптивность: страница без горизонтального overflow */
+  body.role-brewop .page { padding: 12px 12px; overflow-x: hidden; }
+  body.role-brewop #warshchik-list { max-width: 100%; }
   /* заголовок ровно, без съезжания */
   body.role-brewop #warshchik-list .cal-header { align-items: center; margin-bottom: 10px; }
   body.role-brewop #page-title-warshchik { font-size: 20px; }
@@ -6792,22 +6793,25 @@ function renderZakladkaDetail(b) {
       <div id="brew-timer-display" style="margin-top:10px; font-size:13px; color:var(--text2);"></div>
     </div>
 
-    <div class="card" style="padding:0 16px;">
-      <div style="padding:10px 0 6px; font-size:12px; color:var(--text2); display:grid; grid-template-columns:24px 18px 1fr auto; gap:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.4px;">
-        <div></div><div>#</div><div>Компонент</div><div style="text-align:right;">Норма</div>
+    <div class="card" style="padding:0 12px;">
+      <div style="padding:10px 0 6px; font-size:11px; color:var(--text2); display:grid; grid-template-columns:20px 1fr 72px 72px; gap:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.4px;">
+        <div>#</div><div>Компонент</div><div style="text-align:right;">Норма</div><div style="text-align:center;">Факт</div>
       </div>
       ${b.ingredients.sort((a,c)=>a.order-c.order).map((ing, i) => {
         const isDone = b.factIngredients[i] !== undefined;
-        const checkHtml = canAct
-          ? `<div class="ing-check ${isDone?'done':''}" onclick="toggleIngredient(${i})" id="ing-check-${i}">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>`
-          : `<div class="ing-check ${isDone?'done':''}" style="pointer-events:none;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
-        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.6;' : ''} display:grid; grid-template-columns:24px 18px 1fr auto; gap:8px; align-items:center;">
-          ${checkHtml}
-          <div class="ing-order">${ing.order}</div>
-          <div class="ing-name">${ing.name}</div>
-          <div style="text-align:right; font-size:14px; font-weight:700; color:var(--accent);">${ing.normFact} ${ing.unit}</div>
+        const factVal = isDone ? b.factIngredients[i] : '';
+        const factHtml = canAct
+          ? `<input type="number" id="ing-input-${i}" value="${factVal}" placeholder="—"
+               onchange="saveIngFact(${i})"
+               style="width:100%; box-sizing:border-box; text-align:center; font-size:14px; font-weight:700;
+                      background:var(--surface2); border:1.5px solid ${isDone?'var(--accent2)':'var(--border)'};
+                      border-radius:8px; color:var(--text); padding:5px 4px; outline:none;">`
+          : `<div style="text-align:center; font-size:14px; font-weight:700; color:var(--text2);">${factVal || '—'}</div>`;
+        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.65;' : ''} display:grid; grid-template-columns:20px 1fr 72px 72px; gap:6px; align-items:center; padding:6px 0;">
+          <div class="ing-order" style="font-size:12px; color:var(--text3);">${ing.order}</div>
+          <div class="ing-name" style="font-size:14px;">${ing.name}</div>
+          <div style="text-align:right; font-size:14px; font-weight:700; color:var(--accent); white-space:nowrap;">${ing.normFact} ${ing.unit}</div>
+          ${factHtml}
         </div>`;
       }).join('')}
     </div>
@@ -6932,9 +6936,20 @@ function saveIngFact(i) {
   if (!canActOnPage('warshchik')) return;
   const b = state.batches.find(x=>x.id===state.currentBatchId);
   if (!b) return;
-  const val = parseFloat(document.getElementById(`ing-input-${i}`).value);
-  if (!isNaN(val)) b.factIngredients[i] = val;
+  const input = document.getElementById(`ing-input-${i}`);
+  const row = document.getElementById(`ing-row-${i}`);
+  const val = parseFloat(input.value);
+  if (!isNaN(val) && val >= 0) {
+    b.factIngredients[i] = val;
+    if (row) row.style.opacity = '0.65';
+    if (input) input.style.borderColor = 'var(--accent2)';
+  } else {
+    delete b.factIngredients[i];
+    if (row) row.style.opacity = '1';
+    if (input) input.style.borderColor = 'var(--border)';
+  }
   saveState();
+  updateZakladkaProgress(b);
 }
 
 function updateZakladkaProgress(b) {
