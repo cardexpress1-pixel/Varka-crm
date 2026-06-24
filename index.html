@@ -490,6 +490,14 @@
     width: 44px; height: 44px; padding: 0; color: var(--text2); flex-shrink: 0; }
   .logout-icon { display: none; }
   body.role-brewop .logout-icon { display: block; }
+  /* Кнопка «Назад» в шапке — на месте «Выйти», только внутри задания */
+  #nav-back-btn { display: none; align-items: center; gap: 6px; cursor: pointer;
+    background: var(--accent); border: none; color: #fff; font-size: 15px; font-weight: 700;
+    height: 44px; padding: 0 16px; border-radius: 10px; font-family: inherit; flex-shrink: 0; }
+  #nav-back-btn:active { filter: brightness(0.92); }
+  body.role-brewop.brewop-detail-open .logout-btn { display: none !important; }
+  body.role-brewop.brewop-detail-open #user-role-pill { display: none; }
+  body.role-brewop.brewop-detail-open #nav-back-btn { display: inline-flex; }
 
   /* Детальный вид задания — фиксированный overlay, адресная строка не всплывает */
   body.role-brewop #warshchik-detail {
@@ -1291,6 +1299,10 @@
     <div class="user-chip">
       <span class="role-pill" id="user-role-pill"></span>
     </div>
+    <button id="nav-back-btn" onclick="backToList()" title="Назад" style="display:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <span>Назад</span>
+    </button>
     <button class="logout-btn" onclick="doLogout()" title="Выйти">
       <svg class="logout-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       <span class="logout-label">Выйти</span>
@@ -2792,6 +2804,7 @@ function doLogout() {
   logActivity('Выход из системы', { target: currentUser ? currentUser.roleId : '' });
   currentUser = null;
   document.body.classList.remove('role-brewop');
+  document.body.classList.remove('brewop-detail-open');
   try { sessionStorage.removeItem('varka_session'); } catch(e) {}
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -6823,7 +6836,10 @@ function openZakladka(id) {
   detail.style.display = 'block';
   renderZakladkaDetail(b);
   // Pushstate: перехватываем свайп-назад браузера — назад только через кнопку
-  if (isBrewOperatorRole()) history.pushState({ brewopTask: id }, '');
+  if (isBrewOperatorRole()) {
+    document.body.classList.add('brewop-detail-open');
+    history.pushState({ brewopTask: id }, '');
+  }
 }
 
 function renderZakladkaDetail(b) {
@@ -6851,11 +6867,15 @@ function renderZakladkaDetail(b) {
     startBtnHtml = `<div style="font-size:14px; font-weight:700; color:var(--text2);">${statusText}</div>`;
   }
 
-  detail.innerHTML = `
+  // Кнопка «Назад»: у оператора варки она в шапке (на месте «Выйти»),
+  // у остальных ролей — встроенная в начало контента.
+  const inlineBackBtn = isBrewOperatorRole() ? '' : `
     <button onclick="backToList()" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent);border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;padding:11px 20px;border-radius:12px;box-shadow:0 4px 12px rgba(59,130,246,.3);">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       Назад
-    </button>
+    </button>`;
+  detail.innerHTML = `
+    ${inlineBackBtn}
     <div class="detail-header">
       <div class="detail-batch-num">${b.id} · ${fmtDateHuman(b.brewDate)} · ${b.reactor}</div>
       <div class="detail-product">${b.name}</div>
@@ -7051,6 +7071,7 @@ function updateZakladkaProgress(b) {
 
 function backToList() {
   state.currentBatchId = null;
+  document.body.classList.remove('brewop-detail-open');
   document.getElementById('warshchik-detail').style.display = 'none';
   document.getElementById('warshchik-list').style.display = 'block';
   render();
