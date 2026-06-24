@@ -3005,7 +3005,25 @@ function calcIngredients(sku, volume) {
     normFact: ing.unit === 'г' ? Math.round(ing.norm * ratio) : Math.round(ing.norm * ratio * 10) / 10
   }));
 }
-function nextBatchId() { const id = `П-${String(state.batchCounter).padStart(3,'0')}`; state.batchCounter++; return id; }
+function nextBatchId() {
+  // Гарантируем уникальность ID: пропускаем номера, уже занятые ЛЮБОЙ партией (включая
+  // мягко удалённые — они остаются в state.batches для журнала). Иначе счётчик, отставший
+  // после сброса/демо-данных, выдавал бы дубликат ID → коллизия, и действия (назначение,
+  // старт варки и т.д.) попадали бы на не ту копию партии.
+  let id;
+  do { id = `П-${String(state.batchCounter).padStart(3,'0')}`; state.batchCounter++; }
+  while (state.batches.some(b => b.id === id));
+  return id;
+}
+
+// Безопасный поиск партии по id. ВАЖНО: id могут дублироваться (мягко удалённые партии
+// остаются в массиве, а старый счётчик мог переиспользовать номер). При коллизии берём
+// ЖИВУЮ (не удалённую) партию — иначе действия попадали бы на удалённую копию, а реальная
+// queued-партия не двигалась (баг «назначил — а в Назначена не попало»).
+function getBatchById(id) {
+  return state.batches.find(b => b.id === id && b.status !== 'deleted')
+      || state.batches.find(b => b.id === id);
+}
 function nextRequestId() { const id = `З-${String(state.requestCounter).padStart(3,'0')}`; state.requestCounter++; return id; }
 
 // Транслитерация кириллицы для генерации латинского SKU-префикса
@@ -3156,7 +3174,7 @@ function calcPriorityFromShipDate(shipDate) {
 }
 
 function requestProgress(req) {
-  const batches = req.batchIds.map(id => state.batches.find(b => b.id === id)).filter(Boolean);
+  const batches = req.batchIds.map(id => getBatchById(id)).filter(Boolean);
   const totalPlan = req.items.reduce((s,i) => s + i.qty, 0);
   const totalFact = batches.reduce((s,b) => s + (b.factQty || 0), 0);
   const allDone = batches.length && batches.every(b => b.status === 'done');
@@ -4181,7 +4199,7 @@ function pmCheckQueuedReady(batchId) { /* кнопка всегда активн
 // до тех пор, пока варщик сам не нажмёт «Начать варку».
 function assignBrewing(batchId) {
   if (!canDo('assignBrewing')) { showToast('Недостаточно прав для назначения варки'); return; }
-  const b = state.batches.find(x => x.id === batchId);
+  const b = getBatchById(batchId);
   if (!b) return;
 
   const dateInput = document.getElementById(`pmq-date-${batchId}`);
@@ -4309,7 +4327,7 @@ function pmBrewedCard(b) {
 
 function sendToPouring(batchId) {
   if (!canDo('sendToPouring')) { showToast('Недостаточно прав для передачи в розлив'); return; }
-  const b = state.batches.find(x => x.id === batchId);
+  const b = getBatchById(batchId);
   if (!b) return;
 
   const lineInput = document.getElementById(`pmb-line-${batchId}`);
@@ -4615,7 +4633,7 @@ function renderWpHistory() {
         const entry = weekData[sku][date];
         const batchId = (entry && typeof entry === 'object') ? entry.batchId : entry; // старый формат — просто строка
         const qty = (entry && typeof entry === 'object' && entry.qty !== undefined) ? entry.qty : 0;
-        const batch = state.batches.find(b => b.id === batchId);
+        const batch = getBatchById(batchId);
         rows.push({ sku, name: recipe ? recipe.name : sku, date, qty, batchId, batch });
       });
     });
@@ -5425,7 +5443,7 @@ function pourTaskState(b) {
 }
 
 function openPouringTask(id) {
-  const b = state.batches.find(x => x.id === id);
+  const b = getBatchById(id);
   if (!b) return;
   state.currentPouringId = id;
   document.getElementById('intake-list').style.display = 'none';
@@ -5510,7 +5528,7 @@ function updatePouringTimerDisplay(b) {
 
 function startPouring(batchId) {
   if (!canDo('startPouring')) { showToast('Недостаточно прав'); return; }
-  const b = state.batches.find(x => x.id === batchId);
+  const b = getBatchById(batchId);
   if (!b) return;
   const role = getRoleById(currentUser.roleId);
   b.pouringOperatorName = role ? role.login : (b.pouringOperatorName || null);
@@ -5524,7 +5542,7 @@ function startPouring(batchId) {
 
 function stopPouring(batchId) {
   if (!canDo('stopPouring')) { showToast('Недостаточно прав'); return; }
-  const b = state.batches.find(x => x.id === batchId);
+  const b = getBatchById(batchId);
   if (!b) return;
   b.pouringEndedAt = new Date().toISOString();
   logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок розлива', page: 'production', pmStage: 'poured',
@@ -5541,7 +5559,7 @@ function saveIntakeQty(batchId) {
   const input = document.getElementById(`intake-qty-${batchId}`);
   const qty = parseInt(input.value);
   if (!qty || qty <= 0) { showToast('Введите фактический выход (шт)'); return; }
-  const b = state.batches.find(x => x.id === batchId);
+  const b = getBatchById(batchId);
   if (!b) return;
   b.factQty = qty;
   const devForLog = ((qty - b.planQty)/b.planQty*100).toFixed(1);
@@ -6422,7 +6440,7 @@ function deleteRoleFromModal() {
 // Кнопка удаления — прямо на карточке варки на странице "Варки"
 // ════════════════════════════════════════════════════════════════════════════
 function openDeleteBatchModal(batchId) {
-  const b = state.batches.find(x => x.id === batchId);
+  const b = getBatchById(batchId);
   if (!b) return;
   document.getElementById('delete-batch-info').innerHTML = `<strong>${b.name}</strong><br>${b.id} · ${b.reactor} · ${fmtDateHuman(b.brewDate)} · ${b.volume} кг`;
   document.getElementById('delete-batch-reason').value = '';
@@ -6435,7 +6453,7 @@ function confirmDeleteBatch() {
   const reason = reasonEl.value.trim();
   const batchId = reasonEl.dataset.batchId;
   if (!reason) { showToast('Укажите причину удаления'); return; }
-  const b = state.batches.find(x => x.id === batchId);
+  const b = getBatchById(batchId);
   if (!b) return;
 
   b.deletedStatusBefore = b.status; // сохраняем, в каком статусе была варка до удаления — для истории
@@ -6899,7 +6917,7 @@ function createBatch() {
 // BATCH ACTIONS
 // ════════════════════════════════════════════════════════════════════════════
 function openBatchActions(id) {
-  const b = state.batches.find(x => x.id === id);
+  const b = getBatchById(id);
   if (!b) return;
   const canReschedule = b.status !== 'done' && b.status !== 'deleted' && b.status !== 'cancelled';
 
@@ -6949,7 +6967,7 @@ function openBatchActions(id) {
 // Явный перенос варки по дате/реактору/времени — доступен всем ролям с доступом
 // к Календарю (включая operator), без права удалять/отменять партию.
 function rescheduleBatch(id) {
-  const b = state.batches.find(x => x.id === id);
+  const b = getBatchById(id);
   if (!b) return;
   const newDate = document.getElementById('reschedule-date').value;
   const newReactor = document.getElementById('reschedule-reactor').value;
@@ -6988,7 +7006,7 @@ function rescheduleBatch(id) {
 
 function openFinish(id) {
   closeModal('modal-actions');
-  const b = state.batches.find(x=>x.id===id);
+  const b = getBatchById(id);
   let modal = document.getElementById('modal-finish');
   if (!modal) { modal = document.createElement('div'); modal.id='modal-finish'; modal.className='modal-overlay'; document.body.appendChild(modal);
     modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); }); }
@@ -7009,7 +7027,7 @@ function openFinish(id) {
 
 function finishBatch(id) {
   const qty = parseInt(document.getElementById('finish-qty').value);
-  const b = state.batches.find(x=>x.id===id);
+  const b = getBatchById(id);
   b.factQty = qty;
   b.status = 'done';
   saveState();
@@ -7020,7 +7038,7 @@ function finishBatch(id) {
 }
 
 function setBatchStatus(id, status) {
-  const b = state.batches.find(x=>x.id===id);
+  const b = getBatchById(id);
   if (b) {
     b.status = status;
     if (status === 'active' && !b.brewStartedAt) b.brewStartedAt = new Date().toISOString();
@@ -7032,7 +7050,7 @@ function setBatchStatus(id, status) {
 // ЗАКЛАДКА (warshchik detail view)
 // ════════════════════════════════════════════════════════════════════════════
 function openZakladka(id) {
-  const b = state.batches.find(x=>x.id===id);
+  const b = getBatchById(id);
   if (!b) return;
   state.currentBatchId = id;
   document.getElementById('warshchik-list').style.display = 'none';
@@ -7161,7 +7179,7 @@ function updateBrewTimerDisplay(b) {
 
 function startBrewTimer(id) {
   if (!canDo('startBrewing')) { showToast('Недостаточно прав'); return; }
-  const b = state.batches.find(x=>x.id===id);
+  const b = getBatchById(id);
   if (!b) return;
   // оператор варки может стартовать только свою назначенную задачу
   if (b.assignedBrewingOperatorRoleId && b.assignedBrewingOperatorRoleId !== currentUser.roleId
@@ -7180,7 +7198,7 @@ function startBrewTimer(id) {
 
 function stopBrewTimer(id) {
   if (!canDo('finishBrewing')) { showToast('Недостаточно прав'); return; }
-  const b = state.batches.find(x=>x.id===id);
+  const b = getBatchById(id);
   if (!b) return;
   if (b.assignedBrewingOperatorRoleId && b.assignedBrewingOperatorRoleId !== currentUser.roleId
       && !((getRoleById(currentUser.roleId)||{}).fullAccess)) {
@@ -7212,7 +7230,7 @@ function stopBrewTimer(id) {
 // Оператор варки сообщает о проблеме — пишется в журнал событий и activityLog.
 function reportBrewProblem(id) {
   if (!canDo('reportBrewProblem')) { showToast('Недостаточно прав'); return; }
-  const b = state.batches.find(x=>x.id===id);
+  const b = getBatchById(id);
   if (!b) return;
   const text = prompt(`Опишите проблему по партии ${b.id} (${b.name}):`, '');
   if (text === null) return;
@@ -7226,7 +7244,7 @@ function reportBrewProblem(id) {
 
 function toggleIngredient(i) {
   if (!canActOnPage('warshchik')) return;
-  const b = state.batches.find(x=>x.id===state.currentBatchId);
+  const b = getBatchById(state.currentBatchId);
   if (!b) return;
   // Ручного ввода факта больше нет — галочка просто отмечает компонент как добавленный
   // по норме (факт = норма).
@@ -7245,7 +7263,7 @@ function toggleIngredient(i) {
 
 function saveIngFact(i) {
   if (!canActOnPage('warshchik')) return;
-  const b = state.batches.find(x=>x.id===state.currentBatchId);
+  const b = getBatchById(state.currentBatchId);
   if (!b) return;
   const input = document.getElementById(`ing-input-${i}`);
   const row = document.getElementById(`ing-row-${i}`);
@@ -7554,7 +7572,7 @@ setInterval(() => {
   if (!currentUser || !state.currentBatchId) return;
   const detailVisible = document.getElementById('warshchik-detail')?.style.display !== 'none';
   if (!detailVisible) return;
-  const b = state.batches.find(x => x.id === state.currentBatchId);
+  const b = getBatchById(state.currentBatchId);
   if (b) updateBrewTimerDisplay(b);
 }, 1000);
 
