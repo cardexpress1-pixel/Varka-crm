@@ -99,6 +99,10 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; transition: background-color .15s, color .15s; overflow: hidden; width: 100%; }
   html { width: 100%; overflow-x: hidden; }
+  /* Десктоп: жёстко фиксируем высоту окна = 100vh, чтобы внешний (оконный) скрол
+     не появлялся вообще. Единственный вертикальный скрол — внутри .app-main.
+     На мобиле (<=860px) НЕ применяем: там макет колоночный и скролится целиком. */
+  @media(min-width: 861px) { html, body { height: 100vh; overflow: hidden; } }
   button { font-family: inherit; }
 
   /* ═══ LOGIN SCREEN ═══ */
@@ -3727,6 +3731,8 @@ function renderAlarmTicker(alarms) {
     if (sb) { sb.style.top = offset + 'px'; sb.style.height = 'calc(100vh - ' + offset + 'px)'; }
     const main = document.querySelector('.app-main');
     if (main) { main.style.height = 'calc(100vh - ' + offset + 'px)'; }
+    const layout = document.querySelector('.app-layout');
+    if (layout) { layout.style.minHeight = 'calc(100vh - ' + offset + 'px)'; }
   }
 
   // Терминал оператора варки — без бегущей строки, она мешает рабочему экрану.
