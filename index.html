@@ -2629,6 +2629,9 @@ function logJournalEvent(opts) {
 }
 
 function saveState() {
+  // Применяем входящее обновление (storage другой вкладки / onSnapshot) — НЕ пишем обратно,
+  // иначе вкладки зацикливаются: storage→render→saveState→storage→… («зависание» всех разделов).
+  if (_applyingRemoteState) return;
   // Защита: не писать пустой state в Firestore при инициализации
   if (!_stateLoadedFromFirestore && db) {
     const hasData = (state.batches && state.batches.length > 0) ||
@@ -2701,22 +2704,26 @@ function setupFirestoreSync() {
   if (!db) return;
   db.collection('varka').doc('state').onSnapshot(snap => {
     if (!snap.exists || Date.now() < _snapshotIgnoreUntil) return;
-    state = { ...state, ...snap.data() };
-    try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
-    applyStateMigrations();
-    render();
-    const p = document.querySelector('.page.active');
-    if (p) {
-      const pid = p.id.replace('page-', '');
-      if      (pid === 'warshchik')  renderWarshchikBatches();
-      else if (pid === 'intake')     renderIntake();
-      else if (pid === 'production') renderProductionManagement();
-      else if (pid === 'weekplan')   renderWeekPlan();
-      else if (pid === 'calendar')   renderCalendar();
-      else if (pid === 'reports')    renderReports();
-      else if (pid === 'journal')    renderJournal();
-      else if (pid === 'dashboard')  renderDashboard();
-    }
+    // применяем входящее состояние из Firestore без обратной записи (saveState подавлён флагом)
+    _applyingRemoteState = true;
+    try {
+      state = { ...state, ...snap.data() };
+      try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
+      applyStateMigrations();
+      render();
+      const p = document.querySelector('.page.active');
+      if (p) {
+        const pid = p.id.replace('page-', '');
+        if      (pid === 'warshchik')  renderWarshchikBatches();
+        else if (pid === 'intake')     renderIntake();
+        else if (pid === 'production') renderProductionManagement();
+        else if (pid === 'weekplan')   renderWeekPlan();
+        else if (pid === 'calendar')   renderCalendar();
+        else if (pid === 'reports')    renderReports();
+        else if (pid === 'journal')    renderJournal();
+        else if (pid === 'dashboard')  renderDashboard();
+      }
+    } finally { _applyingRemoteState = false; }
   }, err => console.error('[Firestore] sync:', err));
 }
 
@@ -3328,6 +3335,7 @@ let db = null;
 let _fbReady = false;
 let _fbUid = null;
 let _snapshotIgnoreUntil = 0;
+let _applyingRemoteState = false; // true, пока применяем ВХОДЯЩЕЕ обновление (storage другой вкладки / onSnapshot Firestore) — saveState не пишет обратно, иначе вкладки зацикливают друг друга
 let _stateLoadedFromFirestore = false;
 let _firebaseError = false;
 
@@ -3663,6 +3671,7 @@ function renderAlarms() {
 }
 
 let _tickerAnim = null;
+let _tickerRunId = 0; // токен поколения тикера: живёт только последний запуск; осиротевшие rAF-циклы (от частых render) сами останавливаются по несовпадению
 let _tickerPauseUntil = 0;
 let _tickerPos = 0;
 
@@ -3671,6 +3680,11 @@ function renderAlarmTicker(alarms) {
   const inner   = document.getElementById('alarm-ticker-inner');
   const content = document.getElementById('alarm-ticker-content');
   if (!ticker || !inner || !content) return;
+
+  // Новое поколение тикера. Любой ранее запущенный rAF-цикл step увидит несовпадение
+  // myRun !== _tickerRunId и сам остановится — это исключает накопление осиротевших циклов
+  // (главная причина нарастающего «зависания» при частых render).
+  const myRun = ++_tickerRunId;
 
   function adjustSidebar(tickerVisible) {
     const tickerH = tickerVisible ? 28 : 0;
@@ -3718,6 +3732,7 @@ function renderAlarmTicker(alarms) {
 
   // Ждём рендер DOM чтобы измерить позиции
   requestAnimationFrame(() => {
+    if (myRun !== _tickerRunId) return; // устарел — запущен более новый тикер
     const totalW = content.scrollWidth / 2;
     if (totalW <= 0) return;
 
@@ -3731,6 +3746,7 @@ function renderAlarmTicker(alarms) {
     const PAUSE_MS = 5000;
 
     function step(ts) {
+      if (myRun !== _tickerRunId) return; // осиротевший цикл прошлого поколения — стоп
       // Если сейчас пауза — ждём
       if (ts < _tickerPauseUntil) {
         // Во время паузы пульсируем фон красным
@@ -7553,7 +7569,9 @@ window.addEventListener('storage', function(e) {
     // Единая миграция (включая новые поля assigned-стадии) для партий из другой вкладки
     applyStateMigrations();
   } catch(e2) {}
-  render();
+  // применяем чужое обновление без обратной записи (иначе пинг-понг между вкладками)
+  _applyingRemoteState = true;
+  try { render(); } finally { _applyingRemoteState = false; }
 });
 
 // Живое обновление индикатора заполнения реактора (имитация по времени) —
