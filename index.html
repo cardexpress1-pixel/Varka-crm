@@ -3525,6 +3525,25 @@ function computeAlarms() {
     });
   });
 
+  // 1b. Варка идёт дольше запланированного времени — активная варка, у которой реальное
+  // время с момента старта уже превысило плановое brewHours. Критично: процесс «висит».
+  liveBatches.filter(b => b.status === 'active' && b.brewStartedAt).forEach(b => {
+    const elapsedMs = now - new Date(b.brewStartedAt);
+    const plannedMs = (b.brewHours || 2) * 3600000;
+    if (elapsedMs > plannedMs) {
+      const fmtDur = ms => { const h = Math.floor(ms/3600000), m = Math.round((ms%3600000)/60000); return h > 0 ? `${h}ч ${m}м` : `${m}м`; };
+      const elapsedStr = fmtDur(elapsedMs);
+      const overStr = fmtDur(elapsedMs - plannedMs);
+      alarms.push({
+        key: `brew_overrun_${b.id}`, batchId: b.id, batchName: b.name,
+        severity: 'critical', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6M22 6l-3-3"/></svg>', group: 'overdue',
+        text: `<strong>${b.name}</strong> (${b.id}) варится ${elapsedStr} — дольше плана на ${overStr} (план ${b.brewHours||2}ч)`,
+        plainText: `Варка дольше плана: ${b.name} (${b.id}) варится ${elapsedStr}, превышение на ${overStr} (план ${b.brewHours||2}ч)`,
+        page: 'production', pmStage: getBatchStage(b)
+      });
+    }
+  });
+
   // 2. Перегруз реактора на сегодня/завтра — ведёт в Календарь, как и раньше (отдельная тема, не про конкретную партию)
   [today, fmtDate(addDays(new Date(today), 1))].forEach(date => {
     state.reactors.forEach(r => {
