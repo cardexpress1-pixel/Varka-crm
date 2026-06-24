@@ -91,7 +91,8 @@
     body.theme-light .sidebar { border-bottom: 1px solid var(--border); }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; transition: background-color .15s, color .15s; overflow: hidden; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; transition: background-color .15s, color .15s; overflow: hidden; width: 100%; }
+  html { width: 100%; overflow-x: hidden; }
   button { font-family: inherit; }
 
   /* ═══ LOGIN SCREEN ═══ */
@@ -461,9 +462,24 @@
   body.role-brewop #reactor-tabs { display: none !important; }
   body.role-brewop #reactor-info-panel { display: none !important; }
   body.role-brewop #brewop-free-panel { display: none !important; }
-  /* адаптивность: страница без горизонтального overflow */
-  body.role-brewop .page { padding: 12px 12px; overflow-x: hidden; }
-  body.role-brewop #warshchik-list { max-width: 100%; }
+  /* адаптивность */
+  body.role-brewop .page { padding: 12px; overflow-x: hidden; box-sizing: border-box; width: 100%; }
+  body.role-brewop #warshchik-list { max-width: 100%; box-sizing: border-box; }
+  /* крупные карточки задач */
+  body.role-brewop .batch-card { padding: 16px; border-radius: 14px; }
+  body.role-brewop .batch-name { font-size: 17px !important; font-weight: 800; }
+  body.role-brewop .batch-meta { font-size: 14px !important; gap: 6px; }
+  body.role-brewop .batch-meta span { font-size: 14px; }
+  body.role-brewop .batch-status { margin-top: 10px; font-size: 14px; }
+  /* убираем полосу/стрелки у числового ввода ингредиентов */
+  .ing-fact-input { -webkit-appearance: none; appearance: none; background: var(--surface2);
+    border: 1.5px solid var(--border); border-radius: 8px; color: var(--text);
+    font-size: 15px; font-weight: 700; font-family: inherit;
+    text-align: center; width: 100%; box-sizing: border-box; padding: 6px 4px; outline: none; }
+  .ing-fact-input::-webkit-inner-spin-button,
+  .ing-fact-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .ing-fact-input[type=number] { -moz-appearance: textfield; }
+  .ing-fact-input.filled { border-color: var(--accent2); }
   /* заголовок ровно, без съезжания */
   body.role-brewop #warshchik-list .cal-header { align-items: center; margin-bottom: 10px; }
   body.role-brewop #page-title-warshchik { font-size: 20px; }
@@ -4889,7 +4905,7 @@ function warshchikBatchCard(b, isOverdue) {
       <div class="batch-info">
         <div class="batch-name">${b.name}</div>
         <div class="batch-meta">
-          <span>${b.id}</span>
+          <span>${b.id} · <b>${b.reactor}</b></span>
           <span>${b.volume} кг → ${b.planQty} шт</span>
           <span ${isOverdue ? 'style="color:var(--danger); font-weight:700;"' : ''}>${isOverdue ? 'Просрочено · ' : ''}${fmtDateHuman(b.brewDate)} · ${b.brewHours}ч</span>
         </div>
@@ -6794,20 +6810,20 @@ function renderZakladkaDetail(b) {
     </div>
 
     <div class="card" style="padding:0 12px;">
-      <div style="padding:10px 0 6px; font-size:11px; color:var(--text2); display:grid; grid-template-columns:20px 1fr 72px 72px; gap:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.4px;">
+      <div style="padding:10px 0 6px; font-size:11px; color:var(--text2); display:grid; grid-template-columns:20px 1fr 80px 90px; gap:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.4px;">
         <div>#</div><div>Компонент</div><div style="text-align:right;">Норма</div><div style="text-align:center;">Факт</div>
       </div>
       ${b.ingredients.sort((a,c)=>a.order-c.order).map((ing, i) => {
         const isDone = b.factIngredients[i] !== undefined;
         const factVal = isDone ? b.factIngredients[i] : '';
         const factHtml = canAct
-          ? `<input type="number" id="ing-input-${i}" value="${factVal}" placeholder="—"
-               onchange="saveIngFact(${i})"
-               style="width:100%; box-sizing:border-box; text-align:center; font-size:14px; font-weight:700;
-                      background:var(--surface2); border:1.5px solid ${isDone?'var(--accent2)':'var(--border)'};
-                      border-radius:8px; color:var(--text); padding:5px 4px; outline:none;">`
-          : `<div style="text-align:center; font-size:14px; font-weight:700; color:var(--text2);">${factVal || '—'}</div>`;
-        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.65;' : ''} display:grid; grid-template-columns:20px 1fr 72px 72px; gap:6px; align-items:center; padding:6px 0;">
+          ? `<div style="display:flex;align-items:center;gap:4px;">
+               <input type="number" id="ing-input-${i}" value="${factVal}" placeholder="0"
+                 onchange="saveIngFact(${i})" class="ing-fact-input${isDone?' filled':''}">
+               <span style="font-size:12px;color:var(--text2);white-space:nowrap;flex-shrink:0;">${ing.unit}</span>
+             </div>`
+          : `<div style="text-align:center; font-size:14px; font-weight:700; color:var(--text2);">${factVal || '—'} <span style="font-size:11px">${ing.unit}</span></div>`;
+        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.65;' : ''} display:grid; grid-template-columns:20px 1fr 80px 90px; gap:6px; align-items:center; padding:7px 0;">
           <div class="ing-order" style="font-size:12px; color:var(--text3);">${ing.order}</div>
           <div class="ing-name" style="font-size:14px;">${ing.name}</div>
           <div style="text-align:right; font-size:14px; font-weight:700; color:var(--accent); white-space:nowrap;">${ing.normFact} ${ing.unit}</div>
@@ -6942,11 +6958,11 @@ function saveIngFact(i) {
   if (!isNaN(val) && val >= 0) {
     b.factIngredients[i] = val;
     if (row) row.style.opacity = '0.65';
-    if (input) input.style.borderColor = 'var(--accent2)';
+    if (input) input.classList.add('filled');
   } else {
     delete b.factIngredients[i];
     if (row) row.style.opacity = '1';
-    if (input) input.style.borderColor = 'var(--border)';
+    if (input) input.classList.remove('filled');
   }
   saveState();
   updateZakladkaProgress(b);
