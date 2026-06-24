@@ -5220,9 +5220,16 @@ function renderIntake() {
   pending.sort((a,b) => new Date(a.pouringDate || a.brewDate) - new Date(b.pouringDate || b.brewDate));
 
   if (!pending.length) {
-    el.innerHTML = state.intakeShowAll
-      ? `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg></div><div class="empty-title">Нет варок, ожидающих приёмки</div><div>Все завершённые варки уже учтены</div></div>`
-      : `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg></div><div class="empty-title">Нет варок за этот день</div><div>Нажмите «Сегодня», чтобы увидеть всю очередь ожидания</div></div>`;
+    const checkIcon = `<div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg></div>`;
+    const waitIcon = `<div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg></div>`;
+    if (isPourOperatorRole()) {
+      // Терминал оператора розлива — формулировки про розлив, без выбора даты
+      el.innerHTML = `<div class="empty-state">${checkIcon}<div class="empty-title">Нет заданий на розлив</div><div>Все переданные партии разлиты</div></div>`;
+    } else {
+      el.innerHTML = state.intakeShowAll
+        ? `<div class="empty-state">${checkIcon}<div class="empty-title">Нет варок, ожидающих приёмки</div><div>Все завершённые варки уже учтены</div></div>`
+        : `<div class="empty-state">${waitIcon}<div class="empty-title">Нет варок за этот день</div><div>Нажмите «Сегодня», чтобы увидеть всю очередь ожидания</div></div>`;
+    }
     return;
   }
 
