@@ -454,16 +454,21 @@
   body.role-brewop .nav-right { margin-left: auto; padding-left: 0; }
   /* кнопка «Выйти» как аккуратная иконка */
   body.role-brewop .logout-label { display: none; }
-  body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; width: 34px; height: 34px; padding: 0; color: var(--text2); }
+  body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; width: 44px; height: 44px; padding: 0; color: var(--text2); }
   .logout-icon { display: none; }
   body.role-brewop .logout-icon { display: block; }
   /* реакторы — вертикальная сетка под телефон, все 7 видны без карусели */
-  body.role-brewop #reactor-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; overflow: visible; flex-wrap: wrap; justify-content: stretch; padding-bottom: 4px; }
-  body.role-brewop #reactor-tabs .reactor-card { width: 100% !important; flex: none !important; min-height: 92px; }
-  body.role-brewop #reactor-tabs .reactor-card .reactor-card-name { font-size: 22px; }
+  body.role-brewop #reactor-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; overflow: visible; flex-wrap: wrap; justify-content: stretch; padding-bottom: 4px; width: 100%; box-sizing: border-box; }
+  body.role-brewop #reactor-tabs .reactor-card { width: 100% !important; flex: none !important; min-height: 100px; box-sizing: border-box; overflow: hidden; }
+  body.role-brewop #reactor-tabs .reactor-card .reactor-card-name { font-size: 24px; }
+  /* эффект нажатия не выходит за пределы карточки */
+  body.role-brewop #reactor-tabs .reactor-card .rtab-count-badge { position: absolute; top: 6px; right: 6px; z-index: 2; }
   /* заголовок ровно, без съезжания */
   body.role-brewop #warshchik-list .cal-header { align-items: center; margin-bottom: 10px; }
   body.role-brewop #page-title-warshchik { font-size: 20px; }
+  /* выделение свободного реактора при тапе */
+  .reactor-card.brewop-selected { box-shadow: 0 0 0 2.5px var(--accent); }
+  #brewop-free-panel { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 18px 16px; text-align: center; margin-bottom: 8px; }
 
   .reactor-card-icon { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
   .reactor-card-name { font-size: 30px; font-weight: 900; letter-spacing: .01em; line-height: 1; margin: 4px 0; }
@@ -4836,12 +4841,18 @@ function renderWarshchikBatches() {
     // «всё сварено» — только если реально сварили партию сегодня (дата варки = сегодня),
     // иначе старые завершённые партии давали бы ложное «всё сварено» по умолчанию.
     const hadDoneToday = todays.some(b => b.status === 'done' && b.brewDate === today);
-    el.innerHTML = hadDoneToday
+    const freePanelHtmlEmpty = (isDedicatedBrewOp && _brewopSelectedReactor && brewReactorState(_brewopSelectedReactor).color === 'white')
+      ? `<div id="brewop-free-panel"><div style="font-size:18px; font-weight:800; color:var(--text); margin-bottom:4px;">${_brewopSelectedReactor}</div><div style="font-size:13px; color:var(--text2);">Реактор свободен · Задач на сегодня нет</div></div>`
+      : '';
+    el.innerHTML = freePanelHtmlEmpty + (hadDoneToday
       ? `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg></div><div class="empty-title">На сегодня всё сварено</div></div>`
-      : `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-title">На сегодня варки не назначены</div></div>`;
+      : `<div class="empty-state"><div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-title">На сегодня варки не назначены</div></div>`);
     return;
   }
-  el.innerHTML = headerNote + batches.map(b => warshchikBatchCard(b, !state.warshchikViewingHistory && b.brewDate < today)).join('');
+  const freePanelHtml = (isDedicatedBrewOp && _brewopSelectedReactor && brewReactorState(_brewopSelectedReactor).color === 'white')
+    ? `<div id="brewop-free-panel"><div style="font-size:18px; font-weight:800; color:var(--text); margin-bottom:4px;">${_brewopSelectedReactor}</div><div style="font-size:13px; color:var(--text2);">Реактор свободен · Задач на сегодня нет</div></div>`
+    : '';
+  el.innerHTML = freePanelHtml + headerNote + batches.map(b => warshchikBatchCard(b, !state.warshchikViewingHistory && b.brewDate < today)).join('');
 }
 
 // Генерирует HTML сегментированного индикатора "как батарейка".
@@ -4912,9 +4923,18 @@ function brewReactorState(reactorName) {
 // Тап по карточке реактора в терминале варщика — открыть задание на нём.
 function openReactorTask(reactorName) {
   const st = brewReactorState(reactorName);
-  // Есть задача — открываем. Свободный реактор — ничего не делаем (без всплывающих
-  // уведомлений, чтобы не перекрывать список снизу).
-  if (st.batch) openZakladka(st.batch.id);
+  if (st.batch) {
+    _brewopSelectedReactor = null;
+    openZakladka(st.batch.id);
+  } else {
+    // Свободный реактор — показываем панель снизу (toggle при повторном тапе)
+    _brewopSelectedReactor = (_brewopSelectedReactor === reactorName) ? null : reactorName;
+    // Подсветка выбранной карточки
+    document.querySelectorAll('#reactor-tabs .reactor-card').forEach(btn => {
+      btn.classList.toggle('brewop-selected', btn.getAttribute('onclick') === `openReactorTask('${_brewopSelectedReactor}')`);
+    });
+    renderWarshchikBatches();
+  }
 }
 
 function getReactorCardIcon(color) {
@@ -4928,6 +4948,7 @@ function getReactorCardIcon(color) {
 }
 
 let _reactorDeselectTimer = null;
+let _brewopSelectedReactor = null;
 function filterReactor(r, btn, ev) {
   if (ev) ev.stopPropagation();
   if (_reactorDeselectTimer) { clearTimeout(_reactorDeselectTimer); _reactorDeselectTimer = null; }
@@ -6772,8 +6793,8 @@ function renderZakladkaDetail(b) {
     </div>
 
     <div class="card" style="padding:0 16px;">
-      <div style="padding:10px 0 6px; font-size:12px; color:var(--text2); display:grid; grid-template-columns:24px 18px 1fr 80px 45px; gap:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.4px;">
-        <div></div><div>#</div><div>Компонент</div><div style="text-align:right;">Норма</div><div></div>
+      <div style="padding:10px 0 6px; font-size:12px; color:var(--text2); display:grid; grid-template-columns:24px 18px 1fr auto; gap:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.4px;">
+        <div></div><div>#</div><div>Компонент</div><div style="text-align:right;">Норма</div>
       </div>
       ${b.ingredients.sort((a,c)=>a.order-c.order).map((ing, i) => {
         const isDone = b.factIngredients[i] !== undefined;
@@ -6782,12 +6803,11 @@ function renderZakladkaDetail(b) {
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>`
           : `<div class="ing-check ${isDone?'done':''}" style="pointer-events:none;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
-        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.6;' : ''} display:grid; grid-template-columns:24px 18px 1fr 80px 45px; gap:8px; align-items:center;">
+        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.6;' : ''} display:grid; grid-template-columns:24px 18px 1fr auto; gap:8px; align-items:center;">
           ${checkHtml}
           <div class="ing-order">${ing.order}</div>
           <div class="ing-name">${ing.name}</div>
           <div style="text-align:right; font-size:14px; font-weight:700; color:var(--accent);">${ing.normFact} ${ing.unit}</div>
-          <div class="ing-unit">${ing.unit}</div>
         </div>`;
       }).join('')}
     </div>
