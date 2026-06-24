@@ -4857,6 +4857,11 @@ function renderWarshchikBatches() {
   if (!el) return;
   const today = fmtDate(new Date());
 
+  // В терминале оператора варки вкладки реакторов скрыты — фильтр по реактору
+  // не должен «залипать» (иначе назначенные задания не отображаются, а сбросить
+  // фильтр нечем). Всегда показываем все реакторы.
+  if (isBrewOperatorRole() && state.filterReactor !== 'all') state.filterReactor = 'all';
+
   const currentRoleForNav = getRoleById(currentUser.roleId);
   // Оператор варки — без выбора даты вообще (только сегодня). Для остальных — по настройке роли.
   const showDateNav = isBrewOperatorRole() ? false
@@ -5163,6 +5168,10 @@ function renderIntake() {
   const el = document.getElementById('intake-list');
   if (!el) return;
   const canAct = canActOnPage('intake');
+
+  // В терминале оператора розлива вкладки линий скрыты — фильтр по линии не должен
+  // «залипать» (иначе задания не отображаются, а сбросить нечем).
+  if (isPourOperatorRole() && state.filterPouringLine && state.filterPouringLine !== 'all') state.filterPouringLine = 'all';
 
   const currentRoleForNav = getRoleById(currentUser.roleId);
   const showDateNav = !currentRoleForNav || currentRoleForNav.fields.dateNavIntake !== false;
