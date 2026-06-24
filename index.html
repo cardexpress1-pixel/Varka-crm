@@ -2049,6 +2049,13 @@
     <div class="modal-title" id="ingredients-modal-title">Компоненты сырья</div>
     <input type="hidden" id="ingredients-recipe-sku" />
     <p style="font-size:13px; color:var(--text2); margin-bottom:10px;">Норма указывается на базовую партию рецептуры. Порядок определяет последовательность закладки.</p>
+    <div style="display:flex; gap:6px; align-items:center; padding:0 2px 6px; font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.03em;">
+      <span style="flex:2;">Наименование</span>
+      <span style="width:90px;">Норма</span>
+      <span style="width:70px;">Ед.</span>
+      <span style="width:50px;">№</span>
+      <span style="width:28px;"></span>
+    </div>
     <div id="ingredients-edit-list" style="display:flex; flex-direction:column; gap:8px; max-height:380px; overflow-y:auto;"></div>
     <button class="btn btn-ghost btn-sm" onclick="addIngredientRow()" style="margin-top:10px;">+ Добавить компонент</button>
     <div class="modal-footer">
@@ -6140,9 +6147,9 @@ function renderRecipes() {
             <div style="font-size:12px; color:var(--text2); margin-top:2px;">${r.sku} · Базовая партия: ${r.baseBatch} кг · Тара: ${r.tara} л</div>
           </div>
         </div>
-        <div style="text-align:right; display:flex; align-items:center; gap:10px;">
+        <div style="text-align:right; display:flex; align-items:center; gap:14px;">
           <div>
-            <div style="font-size:12px; font-weight:600; color:var(--text2);">${r.ingredients.length} компонентов</div>
+            <div style="font-size:12px; font-weight:600; color:var(--text2);">Итого используется ${r.ingredients.length} компонентов</div>
             <div style="display:flex; align-items:center; gap:4px; margin-top:4px; justify-content:flex-end;" onclick="event.stopPropagation()">
               <span style="font-size:11px; color:var(--text2);">Время варки:</span>
               ${isAdmin
@@ -6151,8 +6158,9 @@ function renderRecipes() {
             </div>
           </div>
           ${isAdmin ? `
-            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); openIngredientsModal('${r.sku}')">Сырьё</button>
-            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); openDeleteRecipeModal('${r.sku}')">Удалить</button>
+            <div style="width:1px; align-self:stretch; background:var(--border);"></div>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); openIngredientsModal('${r.sku}')">Ввод сырья</button>
+            <button class="btn btn-danger btn-sm" style="margin-left:8px;" onclick="event.stopPropagation(); openDeleteRecipeModal('${r.sku}')">Удалить</button>
           ` : ''}
         </div>
       </div>
