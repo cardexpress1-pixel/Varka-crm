@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ВарКа">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1117">
+<link rel="manifest" href="manifest.json">
 <title>ВарКа — производственная система</title>
 <style>
   :root {
@@ -469,20 +472,21 @@
   body.role-brewop #reactor-info-panel { display: none !important; }
   body.role-brewop #brewop-free-panel { display: none !important; }
 
-  /* Шапка: лого слева, роль по центру (absolute), кнопка выхода справа */
-  body.role-brewop .nav { position: relative; }
-  body.role-brewop .nav-logo { font-size: 20px; flex-shrink: 0; }
+  /* Шапка: [лого] ——— [роль] [выход]. Три зоны во flex-потоке, без наложений.
+     Логотип-картинка брендинга (по умолчанию 360×95) ужимается под высоту шапки. */
+  body.role-brewop .nav-logo { flex: 0 0 auto; font-size: 20px; display: flex; align-items: center; }
+  body.role-brewop .nav-logo img { height: 30px !important; width: auto !important; max-width: 120px; }
+  body.role-brewop .nav-right { flex: 1 1 auto; margin-left: auto; padding-left: 0; gap: 10px;
+    justify-content: flex-end; min-width: 0; }
+  body.role-brewop .user-chip { min-width: 0; overflow: hidden; }
   body.role-brewop #user-role-pill {
-    position: absolute; left: 50%; transform: translateX(-50%);
-    font-size: 11px; font-weight: 800; max-width: 160px;
+    font-size: 11px; font-weight: 800; max-width: 100%;
     overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   }
-  body.role-brewop .nav-right { margin-left: auto; padding-left: 0; gap: 8px; }
-  body.role-brewop .user-chip { position: static; }
   body.role-brewop .logout-label { display: none; }
   body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center;
     background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px;
-    width: 44px; height: 44px; padding: 0; color: var(--text2); }
+    width: 44px; height: 44px; padding: 0; color: var(--text2); flex-shrink: 0; }
   .logout-icon { display: none; }
   body.role-brewop .logout-icon { display: block; }
 
@@ -509,11 +513,7 @@
   .brewop-card-meta { font-size: 14px; color: var(--text2); margin-bottom: 8px; }
   .brewop-card-meta.overdue-text { color: var(--danger); font-weight: 700; }
   .brewop-card-status-row { display: flex; align-items: center; gap: 8px; }
-  .brewop-sdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: #8892a4; }
-  .brewop-sdot.active { background: #f97316; }
-  .brewop-sdot.assigned { background: var(--danger); }
-  @keyframes brewop-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
-  .brewop-sdot.active { animation: brewop-pulse 1.1s ease-in-out infinite; }
+  .brewop-card-status-row .status-dot-ind { width: 10px; height: 10px; }
   .brewop-slabel { font-size: 14px; font-weight: 700; color: var(--text2); }
   .brewop-reactor-badge { font-size: 30px; font-weight: 900; color: var(--accent);
     flex-shrink: 0; text-align: right; line-height: 1; letter-spacing: -1px; white-space: nowrap; }
@@ -3895,6 +3895,13 @@ const PM_STAGES = [
   ['pouring','Идёт розлив'], ['poured','Разлито'], ['finished','Готово']
 ];
 
+// Единая цветовая идентификация стадий (используется и в «Управлении производством»,
+// и в терминале оператора варки — чтобы цвета совпадали).
+const PM_STAGE_COLORS = { queued:'orange', assigned:'red', brewing:'orange', brewed:'blue', pouring:'green', poured:'blue', finished:'white' };
+const PM_STAGE_SHORT = { queued:'Очередь', assigned:'Назначена', brewing:'Варится', brewed:'Сварено', pouring:'Розлив', poured:'Разлито', finished:'Готово' };
+// Понятный для варщика текст статуса задания
+const BREWOP_STAGE_TEXT = { queued:'В очереди', assigned:'Назначена', brewing:'Идёт варка', brewed:'Варка завершена', pouring:'Идёт розлив', poured:'Разлито', finished:'Готово' };
+
 // Возвращает живые партии (без отменённых/удалённых) на нужной стадии, с учётом
 // текущего фильтра по дате — у каждой стадии свой «главный» датовый ориентир:
 // до розлива смотрим на дату варки, после передачи в розлив — на дату розлива.
@@ -3922,8 +3929,6 @@ if (!state.pmDate) state.pmDate = fmtDate(new Date());
   const dateLabelEl = document.getElementById('pm-date-label');
   if (dateLabelEl) dateLabelEl.textContent = state.pmShowAll ? 'Показаны все даты' : fmtDateHuman(state.pmDate);
 
-  const PM_STAGE_COLORS = { queued:'orange', assigned:'red', brewing:'orange', brewed:'blue', pouring:'green', poured:'blue', finished:'white' };
-  const PM_STAGE_SHORT = { queued:'Очередь', assigned:'Назначена', brewing:'Варится', brewed:'Сварено', pouring:'Розлив', poured:'Разлито', finished:'Готово' };
   const PM_STAGE_EMPTY_LBL = { queued:'Нет в очереди', assigned:'Нет назначенных', brewing:'Не варится', brewed:'Нет сваренных', pouring:'Нет в розливе', poured:'Нет разлитых', finished:'Нет готовых' };
   tabsEl.innerHTML = PM_STAGES.map(([id]) => {
     const count = pmGetDateFilteredBatches(id).length;
@@ -4938,14 +4943,16 @@ function renderBatteryIndicator(mode, pct, label) {
 function warshchikBatchCard(b, isOverdue, brewopMode) {
   // Упрощённая крупная карточка для терминала оператора варки
   if (brewopMode) {
-    const dotClass = b.status === 'active' ? 'active' : (b.assignedToBrewing || b.sentToBrewing) ? 'assigned' : '';
-    const statusText = b.status === 'done' ? 'Варка завершена' : b.status === 'active' ? 'Идёт варка' : 'В очереди';
+    // Единая цветовая идентификация — те же цвета, что в «Управлении производством»
+    const stage = getBatchStage(b);
+    const color = PM_STAGE_COLORS[stage] || 'white';
+    const statusText = BREWOP_STAGE_TEXT[stage] || PM_STAGE_SHORT[stage] || '';
     return `<div class="brewop-task-card${isOverdue ? ' overdue' : ''}" onclick="openZakladka('${b.id}')">
       <div class="brewop-card-body">
         <div class="brewop-card-name">${b.name}</div>
         <div class="brewop-card-meta${isOverdue ? ' overdue-text' : ''}">${isOverdue ? 'Просрочено · ' : ''}${fmtDateHuman(b.brewDate)} · ${b.brewHours}ч · ${b.volume} кг</div>
         <div class="brewop-card-status-row">
-          <div class="brewop-sdot ${dotClass}"></div>
+          <span class="status-dot-ind status-dot-${color}"></span>
           <span class="brewop-slabel">${statusText}</span>
         </div>
       </div>
@@ -6873,23 +6880,23 @@ function renderZakladkaDetail(b) {
     </div>
 
     <div class="card" style="padding:0 12px;">
-      <div style="padding:10px 0 6px; font-size:11px; color:var(--text2); display:grid; grid-template-columns:20px 1fr 80px 90px; gap:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.4px;">
+      <div style="padding:10px 0 6px; font-size:11px; color:var(--text2); display:grid; grid-template-columns:16px 1fr 56px 64px; gap:5px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px;">
         <div>#</div><div>Компонент</div><div style="text-align:right;">Норма</div><div style="text-align:center;">Факт</div>
       </div>
       ${b.ingredients.sort((a,c)=>a.order-c.order).map((ing, i) => {
         const isDone = b.factIngredients[i] !== undefined;
         const factVal = isDone ? b.factIngredients[i] : '';
         const factHtml = canAct
-          ? `<div style="display:flex;align-items:center;gap:4px;">
-               <input type="number" id="ing-input-${i}" value="${factVal}" placeholder="0"
-                 onchange="saveIngFact(${i})" class="ing-fact-input${isDone?' filled':''}">
-               <span style="font-size:12px;color:var(--text2);white-space:nowrap;flex-shrink:0;">${ing.unit}</span>
+          ? `<div style="display:flex;align-items:center;gap:3px;">
+               <input type="number" id="ing-input-${i}" value="${factVal}"
+                 onchange="saveIngFact(${i})" class="ing-fact-input${isDone?' filled':''}" style="min-width:0;">
+               <span style="font-size:11px;color:var(--text2);white-space:nowrap;flex-shrink:0;">${ing.unit}</span>
              </div>`
           : `<div style="text-align:center; font-size:14px; font-weight:700; color:var(--text2);">${factVal || '—'} <span style="font-size:11px">${ing.unit}</span></div>`;
-        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.65;' : ''} display:grid; grid-template-columns:20px 1fr 80px 90px; gap:6px; align-items:center; padding:7px 0;">
+        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.65;' : ''} display:grid; grid-template-columns:16px 1fr 56px 64px; gap:5px; align-items:center; padding:7px 0;">
           <div class="ing-order" style="font-size:12px; color:var(--text3);">${ing.order}</div>
-          <div class="ing-name" style="font-size:14px;">${ing.name}</div>
-          <div style="text-align:right; font-size:14px; font-weight:700; color:var(--accent); white-space:nowrap;">${ing.normFact} ${ing.unit}</div>
+          <div class="ing-name" style="font-size:14px; line-height:1.2;">${ing.name}</div>
+          <div style="text-align:right; font-size:14px; font-weight:700; color:var(--accent); white-space:nowrap;">${ing.normFact}<span style="font-size:11px; color:var(--text2); font-weight:600;"> ${ing.unit}</span></div>
           ${factHtml}
         </div>`;
       }).join('')}
