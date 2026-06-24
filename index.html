@@ -2,7 +2,10 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <title>ВарКа — производственная система</title>
 <style>
   :root {
@@ -421,6 +424,9 @@
   #alarm-ticker.has-critical #alarm-ticker-inner { animation: ticker-critical-text 1.2s ease-in-out infinite; }
   #alarm-ticker.has-critical #alarm-ticker-inner.ticker-paused { transform: none !important; }
 
+  /* ═══ LOGIN SCREEN — статичная, без свайпа ═══ */
+  .login-screen { position: fixed !important; inset: 0; overflow: hidden; touch-action: pan-x; }
+
   /* ═══ REACTOR CARDS — новые карточки реакторов на участке варки ═══ */
   #reactor-tabs { gap: 10px; justify-content: center; }
   .reactor-card {
@@ -437,41 +443,72 @@
   /* нажатие («обжатие») работает и для уже выбранной карточки */
   .reactor-card.active:active { transform: translateY(3px) scale(0.96); box-shadow: 0 0 0 2.5px var(--accent), 0 1px 4px rgba(0,0,0,.25); filter: brightness(0.94); transition: transform .05s, box-shadow .05s, filter .05s; }
 
-  /* ═══════════════════════════════════════════════════════════════════════
-     РОЛЬ «ОПЕРАТОР ВАРКИ» — упрощённый мобильный рабочий терминал.
-     Активируется классом body.role-brewop (см. enterApp). Скрываем всё лишнее:
-     боковое меню, бегущую строку, выбор даты, переключатель темы; реакторы —
-     вертикальная сетка 2 колонки; компактная шапка без наложения времени.
-     ═══════════════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════════
+     РОЛЬ «ОПЕРАТОР ВАРКИ» — полноэкранный мобильный терминал.
+     Фиксированный layout: адресная строка не всплывает при скролле.
+     ══════════════════════════════════════════════════════════════════ */
+  body.role-brewop { height: 100dvh; overflow: hidden; }
+  body.role-brewop #app-shell { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  body.role-brewop .nav { height: 52px; min-height: 52px; flex-shrink: 0; padding: 0 14px; }
+  body.role-brewop .app-layout { flex: 1; min-height: 0; overflow: hidden; display: block; }
+  body.role-brewop .sidebar { display: none !important; }
+  body.role-brewop .app-main { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  body.role-brewop .page { padding: 14px; box-sizing: border-box; }
+
+  /* Скрываем лишнее */
   body.role-brewop #sidebar-edge-btn { display: none !important; }
   body.role-brewop #alarm-ticker { display: none !important; }
   body.role-brewop #warshchik-date-nav { display: none !important; }
   body.role-brewop #warshchik-date-label { display: none !important; }
   body.role-brewop #theme-toggle-btn { display: none !important; }
   body.role-brewop #active-badge { display: none !important; }
-  /* время полностью убираем у оператора варки */
   body.role-brewop #nav-clock { display: none !important; }
-  body.role-brewop .nav { gap: 8px; }
-  body.role-brewop .nav-right { margin-left: auto; padding-left: 0; }
-  /* кнопка «Выйти» как аккуратная иконка */
-  body.role-brewop .logout-label { display: none; }
-  body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; width: 44px; height: 44px; padding: 0; color: var(--text2); }
-  .logout-icon { display: none; }
-  body.role-brewop .logout-icon { display: block; }
-  /* оператор варки — без сетки реакторов, сразу список задач */
   body.role-brewop #reactor-tabs { display: none !important; }
   body.role-brewop #reactor-info-panel { display: none !important; }
   body.role-brewop #brewop-free-panel { display: none !important; }
-  /* адаптивность */
-  body.role-brewop .page { padding: 12px; overflow-x: hidden; box-sizing: border-box; width: 100%; }
-  body.role-brewop #warshchik-list { max-width: 100%; box-sizing: border-box; }
-  /* крупные карточки задач */
-  body.role-brewop .batch-card { padding: 16px; border-radius: 14px; }
-  body.role-brewop .batch-name { font-size: 17px !important; font-weight: 800; }
-  body.role-brewop .batch-meta { font-size: 14px !important; gap: 6px; }
-  body.role-brewop .batch-meta span { font-size: 14px; }
-  body.role-brewop .batch-status { margin-top: 10px; font-size: 14px; }
-  /* убираем полосу/стрелки у числового ввода ингредиентов */
+
+  /* Шапка */
+  body.role-brewop .nav-logo { font-size: 20px; }
+  body.role-brewop .nav-right { margin-left: auto; padding-left: 0; gap: 8px; }
+  body.role-brewop .logout-label { display: none; }
+  body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center;
+    background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px;
+    width: 44px; height: 44px; padding: 0; color: var(--text2); }
+  .logout-icon { display: none; }
+  body.role-brewop .logout-icon { display: block; }
+
+  /* Детальный вид задания — фиксированный overlay (без всплытия адресной строки) */
+  body.role-brewop #warshchik-detail {
+    position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background: var(--bg); z-index: 150; padding: 14px; box-sizing: border-box;
+  }
+
+  /* Карточка задания для варщика */
+  .brewop-task-card {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface); border: 2px solid var(--border);
+    border-radius: 18px; padding: 18px 16px; margin-bottom: 12px;
+    cursor: pointer; touch-action: manipulation; user-select: none;
+    transition: transform .1s;
+  }
+  .brewop-task-card:active { transform: scale(0.97); }
+  .brewop-task-card.overdue { border-color: var(--danger); }
+  .brewop-card-body { flex: 1; min-width: 0; }
+  .brewop-card-name { font-size: 19px; font-weight: 800; color: var(--text); line-height: 1.25; margin-bottom: 5px; }
+  .brewop-card-meta { font-size: 14px; color: var(--text2); margin-bottom: 8px; }
+  .brewop-card-meta.overdue-text { color: var(--danger); font-weight: 700; }
+  .brewop-card-status-row { display: flex; align-items: center; gap: 8px; }
+  .brewop-sdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: #8892a4; }
+  .brewop-sdot.active { background: #f97316; }
+  .brewop-sdot.assigned { background: var(--danger); }
+  @keyframes brewop-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+  .brewop-sdot.active { animation: brewop-pulse 1.1s ease-in-out infinite; }
+  .brewop-slabel { font-size: 14px; font-weight: 700; color: var(--text2); }
+  .brewop-reactor-badge { font-size: 30px; font-weight: 900; color: var(--accent);
+    flex-shrink: 0; text-align: right; line-height: 1; letter-spacing: -1px; white-space: nowrap; }
+
+  /* Ввод факта ингредиентов */
   .ing-fact-input { -webkit-appearance: none; appearance: none; background: var(--surface2);
     border: 1.5px solid var(--border); border-radius: 8px; color: var(--text);
     font-size: 15px; font-weight: 700; font-family: inherit;
@@ -480,10 +517,7 @@
   .ing-fact-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   .ing-fact-input[type=number] { -moz-appearance: textfield; }
   .ing-fact-input.filled { border-color: var(--accent2); }
-  /* заголовок ровно, без съезжания */
-  body.role-brewop #warshchik-list .cal-header { align-items: center; margin-bottom: 10px; }
-  body.role-brewop #page-title-warshchik { font-size: 20px; }
-  /* выделение свободного реактора при тапе */
+  /* вспомогательные (не brewop) */
   .reactor-card.brewop-selected { box-shadow: 0 0 0 2.5px var(--accent); }
   #brewop-free-panel { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 18px 16px; text-align: center; margin-bottom: 8px; }
 
@@ -4869,7 +4903,7 @@ function renderWarshchikBatches() {
   const freePanelHtml = (isDedicatedBrewOp && _brewopSelectedReactor && brewReactorState(_brewopSelectedReactor).color === 'white')
     ? `<div id="brewop-free-panel"><div style="font-size:18px; font-weight:800; color:var(--text); margin-bottom:4px;">${_brewopSelectedReactor}</div><div style="font-size:13px; color:var(--text2);">Реактор свободен · Задач на сегодня нет</div></div>`
     : '';
-  el.innerHTML = freePanelHtml + headerNote + batches.map(b => warshchikBatchCard(b, !state.warshchikViewingHistory && b.brewDate < today)).join('');
+  el.innerHTML = freePanelHtml + headerNote + batches.map(b => warshchikBatchCard(b, !state.warshchikViewingHistory && b.brewDate < today, isDedicatedBrewOp)).join('');
 }
 
 // Генерирует HTML сегментированного индикатора "как батарейка".
@@ -4891,7 +4925,24 @@ function renderBatteryIndicator(mode, pct, label) {
   </div>`;
 }
 
-function warshchikBatchCard(b, isOverdue) {
+function warshchikBatchCard(b, isOverdue, brewopMode) {
+  // Упрощённая крупная карточка для терминала оператора варки
+  if (brewopMode) {
+    const dotClass = b.status === 'active' ? 'active' : (b.assignedToBrewing || b.sentToBrewing) ? 'assigned' : '';
+    const statusText = b.status === 'done' ? 'Варка завершена' : b.status === 'active' ? 'Идёт варка' : 'В очереди';
+    return `<div class="brewop-task-card${isOverdue ? ' overdue' : ''}" onclick="openZakladka('${b.id}')">
+      <div class="brewop-card-body">
+        <div class="brewop-card-name">${b.name}</div>
+        <div class="brewop-card-meta${isOverdue ? ' overdue-text' : ''}">${isOverdue ? 'Просрочено · ' : ''}${fmtDateHuman(b.brewDate)} · ${b.brewHours}ч · ${b.volume} кг</div>
+        <div class="brewop-card-status-row">
+          <div class="brewop-sdot ${dotClass}"></div>
+          <span class="brewop-slabel">${statusText}</span>
+        </div>
+      </div>
+      <div class="brewop-reactor-badge">${b.reactor}</div>
+    </div>`;
+  }
+
   const rc = reactorColor(b.reactor);
   const currentRole = getRoleById(currentUser.roleId);
   const fields = (currentRole && currentRole.fields) || {};
@@ -6753,6 +6804,8 @@ function openZakladka(id) {
   const detail = document.getElementById('warshchik-detail');
   detail.style.display = 'block';
   renderZakladkaDetail(b);
+  // Pushstate: перехватываем свайп-назад браузера — назад только через кнопку
+  if (isBrewOperatorRole()) history.pushState({ brewopTask: id }, '');
 }
 
 function renderZakladkaDetail(b) {
@@ -7266,5 +7319,16 @@ setInterval(() => {
     if (elDisplay) elDisplay.textContent = `Идёт: ${formatDuration(new Date() - new Date(b.pouringStartedAt))}`;
   });
 }, 1000);
+
+// Перехват свайпа-назад браузера для оператора варки — назад только через кнопку
+window.addEventListener('popstate', function() {
+  if (!isBrewOperatorRole()) return;
+  const detail = document.getElementById('warshchik-detail');
+  if (detail && detail.style.display !== 'none') {
+    // Возвращаем state в историю чтобы свайп снова не вышел
+    history.pushState({ brewopTask: state.currentBatchId }, '');
+    backToList();
+  }
+});
 </script>
 </body></html>
