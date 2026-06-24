@@ -452,55 +452,66 @@
      РОЛЬ «ОПЕРАТОР ВАРКИ» — полноэкранный мобильный терминал.
      Фиксированный layout: адресная строка не всплывает при скролле.
      ══════════════════════════════════════════════════════════════════ */
-  html:has(body.role-brewop) { overscroll-behavior: none; }
-  body.role-brewop { height: 100dvh; min-height: -webkit-fill-available; overflow: hidden; overscroll-behavior: none; }
-  body.role-brewop #app-shell { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-  body.role-brewop .nav { height: 52px; min-height: 52px; flex-shrink: 0; padding: 0 14px; overflow: hidden; }
-  body.role-brewop .app-layout { flex: 1; min-height: 0; overflow: hidden; display: block; }
-  body.role-brewop .sidebar { display: none !important; }
-  body.role-brewop .app-main { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: none; }
-  body.role-brewop .page { padding: 14px; box-sizing: border-box; }
+  /* ══════════════════════════════════════════════════════════════════
+     ОБЩИЙ ТЕРМИНАЛЬНЫЙ РЕЖИМ (role-terminal) — для оператора варки
+     (role-brewop) и оператора розлива (role-pourop). Полноэкранный
+     фиксированный layout, упрощённая шапка, крупные карточки.
+     ══════════════════════════════════════════════════════════════════ */
+  html:has(body.role-terminal) { overscroll-behavior: none; }
+  body.role-terminal { height: 100dvh; min-height: -webkit-fill-available; overflow: hidden; overscroll-behavior: none; }
+  body.role-terminal #app-shell { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+  body.role-terminal .nav { height: 52px; min-height: 52px; flex-shrink: 0; padding: 0 14px; overflow: hidden; }
+  body.role-terminal .app-layout { flex: 1; min-height: 0; overflow: hidden; display: block; }
+  body.role-terminal .sidebar { display: none !important; }
+  body.role-terminal .app-main { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: none; }
+  body.role-terminal .page { padding: 14px; box-sizing: border-box; }
 
-  /* Скрываем лишнее */
-  body.role-brewop #sidebar-edge-btn { display: none !important; }
-  body.role-brewop #alarm-ticker { display: none !important; }
+  /* Скрываем лишнее (общее) */
+  body.role-terminal #sidebar-edge-btn { display: none !important; }
+  body.role-terminal #alarm-ticker { display: none !important; }
+  body.role-terminal #theme-toggle-btn { display: none !important; }
+  body.role-terminal #active-badge { display: none !important; }
+  body.role-terminal #nav-clock { display: none !important; }
+  /* Специфика варки */
   body.role-brewop #warshchik-date-nav { display: none !important; }
   body.role-brewop #warshchik-date-label { display: none !important; }
-  body.role-brewop #theme-toggle-btn { display: none !important; }
-  body.role-brewop #active-badge { display: none !important; }
-  body.role-brewop #nav-clock { display: none !important; }
   body.role-brewop #reactor-tabs { display: none !important; }
   body.role-brewop #reactor-info-panel { display: none !important; }
   body.role-brewop #brewop-free-panel { display: none !important; }
+  /* Специфика розлива */
+  body.role-pourop #intake-date-nav { display: none !important; }
+  body.role-pourop #intake-line-tabs { display: none !important; }
+  body.role-pourop #pouring-line-info-panel { display: none !important; }
 
   /* Шапка: [лого] ——— [роль] [выход]. Три зоны во flex-потоке, без наложений.
      Логотип-картинка брендинга (по умолчанию 360×95) ужимается под высоту шапки. */
-  body.role-brewop .nav-logo { flex: 0 0 auto; font-size: 20px; display: flex; align-items: center; }
-  body.role-brewop .nav-logo img { height: 30px !important; width: auto !important; max-width: 120px; }
-  body.role-brewop .nav-right { flex: 1 1 auto; margin-left: auto; padding-left: 0; gap: 10px;
+  body.role-terminal .nav-logo { flex: 0 0 auto; font-size: 20px; display: flex; align-items: center; }
+  body.role-terminal .nav-logo img { height: 30px !important; width: auto !important; max-width: 120px; }
+  body.role-terminal .nav-right { flex: 1 1 auto; margin-left: auto; padding-left: 0; gap: 10px;
     justify-content: flex-end; min-width: 0; }
-  body.role-brewop .user-chip { min-width: 0; overflow: hidden; }
-  body.role-brewop #user-role-pill {
+  body.role-terminal .user-chip { min-width: 0; overflow: hidden; }
+  body.role-terminal #user-role-pill {
     font-size: 11px; font-weight: 800; max-width: 100%;
     overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   }
-  body.role-brewop .logout-label { display: none; }
-  body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center;
+  body.role-terminal .logout-label { display: none; }
+  body.role-terminal .logout-btn { display: inline-flex; align-items: center; justify-content: center;
     background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px;
     width: 44px; height: 44px; padding: 0; color: var(--text2); flex-shrink: 0; }
   .logout-icon { display: none; }
-  body.role-brewop .logout-icon { display: block; }
+  body.role-terminal .logout-icon { display: block; }
   /* Кнопка «Назад» в шапке — на месте «Выйти», только внутри задания */
   #nav-back-btn { display: none; align-items: center; gap: 6px; cursor: pointer;
     background: var(--accent); border: none; color: #fff; font-size: 15px; font-weight: 700;
     height: 44px; padding: 0 16px; border-radius: 10px; font-family: inherit; flex-shrink: 0; }
   #nav-back-btn:active { filter: brightness(0.92); }
-  body.role-brewop.brewop-detail-open .logout-btn { display: none !important; }
-  body.role-brewop.brewop-detail-open #user-role-pill { display: none; }
-  body.role-brewop.brewop-detail-open #nav-back-btn { display: inline-flex; }
+  body.role-terminal.terminal-detail-open .logout-btn { display: none !important; }
+  body.role-terminal.terminal-detail-open #user-role-pill { display: none; }
+  body.role-terminal.terminal-detail-open #nav-back-btn { display: inline-flex; }
 
   /* Детальный вид задания — фиксированный overlay, адресная строка не всплывает */
-  body.role-brewop #warshchik-detail {
+  body.role-brewop #warshchik-detail,
+  body.role-pourop #intake-detail {
     position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
     overflow-y: auto; -webkit-overflow-scrolling: touch;
     overscroll-behavior: none;
@@ -1299,7 +1310,7 @@
     <div class="user-chip">
       <span class="role-pill" id="user-role-pill"></span>
     </div>
-    <button id="nav-back-btn" onclick="backToList()" title="Назад">
+    <button id="nav-back-btn" onclick="terminalBack()" title="Назад">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       <span>Назад</span>
     </button>
@@ -1530,6 +1541,7 @@
   </div>
   <div class="reactor-tabs" id="intake-line-tabs"></div>
   <div id="pouring-line-info-panel" style="display:none; margin-bottom:14px;"></div>
+  <div id="intake-detail" style="display:none;"></div>
   <div id="intake-list"></div>
 </div>
 
@@ -2480,9 +2492,19 @@ function isBrewOperatorRole() {
   return !!(role && !role.fullAccess && role.tabs && role.tabs.length === 1 && role.tabs[0] === 'warshchik');
 }
 
+function isPourOperatorRole() {
+  const role = currentUser ? getRoleById(currentUser.roleId) : null;
+  return !!(role && !role.fullAccess && role.tabs && role.tabs.length === 1 && role.tabs[0] === 'intake');
+}
+
+// Любой выделенный участковый оператор — упрощённый мобильный терминал
+function isTerminalRole() {
+  return isBrewOperatorRole() || isPourOperatorRole();
+}
+
 function applyTheme() {
   // Для терминала оператора варки — всегда светлая тема (читаемость в цеху).
-  const isLight = isBrewOperatorRole() ? true : (state.theme === 'light');
+  const isLight = isTerminalRole() ? true : (state.theme === 'light');
   document.body.classList.toggle('theme-light', isLight);
   const btn = document.getElementById('theme-toggle-btn');
   if (btn) btn.textContent = isLight ? '☀️' : '🌙';
@@ -2670,12 +2692,12 @@ function setupFirestoreSync() {
     if (p) {
       const pid = p.id.replace('page-', '');
       if      (pid === 'warshchik')  renderWarshchikBatches();
-      else if (pid === 'intake')     renderIntakeList();
+      else if (pid === 'intake')     renderIntake();
       else if (pid === 'production') renderProductionManagement();
       else if (pid === 'weekplan')   renderWeekPlan();
       else if (pid === 'calendar')   renderCalendar();
       else if (pid === 'reports')    renderReports();
-      else if (pid === 'journal')    renderJournalEntries();
+      else if (pid === 'journal')    renderJournal();
       else if (pid === 'dashboard')  renderDashboard();
     }
   }, err => console.error('[Firestore] sync:', err));
@@ -2803,8 +2825,10 @@ function confirmResetRolesToDefault() {
 function doLogout() {
   logActivity('Выход из системы', { target: currentUser ? currentUser.roleId : '' });
   currentUser = null;
+  document.body.classList.remove('role-terminal');
   document.body.classList.remove('role-brewop');
-  document.body.classList.remove('brewop-detail-open');
+  document.body.classList.remove('role-pourop');
+  document.body.classList.remove('terminal-detail-open');
   try { sessionStorage.removeItem('varka_session'); } catch(e) {}
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -2904,8 +2928,10 @@ function enterApp() {
   const role = getRoleById(currentUser.roleId);
   if (!role) { doLogout(); return; }
 
-  // Упрощённый мобильный режим для выделенного оператора варки
+  // Упрощённый мобильный режим для выделенных участковых операторов
+  document.body.classList.toggle('role-terminal', isTerminalRole());
   document.body.classList.toggle('role-brewop', isBrewOperatorRole());
+  document.body.classList.toggle('role-pourop', isPourOperatorRole());
 
   const pill = document.getElementById('user-role-pill');
   pill.textContent = role.login ? `${role.name} ${role.login}` : role.name;
@@ -2928,10 +2954,18 @@ function showPage(id, btn) {
   else { const b = document.querySelector(`.nav-tab[data-page="${id}"]`); if (b) b.classList.add('active'); }
   if (id === 'warshchik') {
     state.currentBatchId = null;
+    document.body.classList.remove('terminal-detail-open');
     document.getElementById('warshchik-detail').style.display = 'none';
     document.getElementById('warshchik-list').style.display = 'block';
     state.warshchikViewingHistory = false;
     state.warshchikViewDate = fmtDate(new Date());
+  }
+  if (id === 'intake') {
+    state.currentPouringId = null;
+    document.body.classList.remove('terminal-detail-open');
+    const idt = document.getElementById('intake-detail');
+    if (idt) idt.style.display = 'none';
+    const il = document.getElementById('intake-list'); if (il) il.style.display = 'block';
   }
   if (id !== 'production') { clearPmStage(); }
   if (id === 'calendar') renderCalendar();
@@ -5192,6 +5226,26 @@ function renderIntake() {
     return;
   }
 
+  // Терминал оператора розлива — крупные карточки заданий с тапом в детальный экран.
+  if (isPourOperatorRole()) {
+    el.innerHTML = pending.map(b => {
+      const st = pourTaskState(b);
+      const lineShort = (b.pouringLine || '').replace('Линия ', 'Л-');
+      return `<div class="brewop-task-card" onclick="openPouringTask('${b.id}')">
+        <div class="brewop-card-body">
+          <div class="brewop-card-name">${b.name}</div>
+          <div class="brewop-card-meta">${b.id} · ${fmtDateHuman(b.pouringDate || b.brewDate)} · План: ${b.planQty} шт</div>
+          <div class="brewop-card-status-row">
+            <span class="status-dot-ind status-dot-${st.color}"></span>
+            <span class="brewop-slabel">${st.text}</span>
+          </div>
+        </div>
+        <div class="brewop-reactor-badge">${lineShort}</div>
+      </div>`;
+    }).join('');
+    return;
+  }
+
   el.innerHTML = pending.map(b => {
     const pouringRunning = b.pouringStartedAt && !b.pouringEndedAt;
     const pouringDone = b.pouringStartedAt && b.pouringEndedAt;
@@ -5308,6 +5362,102 @@ function renderPouringLineInfoPanel() {
   }).join('');
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// ТЕРМИНАЛ ОПЕРАТОРА РОЗЛИВА — детальный экран задания (по аналогии с варкой)
+// ════════════════════════════════════════════════════════════════════════════
+
+// Смысловой статус задания розлива: ожидает начала / идёт / введите количество.
+// Цвета согласованы с общей идентификацией (red=нужно действие, orange=в процессе, blue=почти готово).
+function pourTaskState(b) {
+  if (!b.pouringStartedAt) return { color: 'red', text: 'Ожидает розлива' };
+  if (!b.pouringEndedAt)   return { color: 'orange', text: 'Идёт розлив' };
+  return { color: 'blue', text: 'Введите количество' };
+}
+
+function openPouringTask(id) {
+  const b = state.batches.find(x => x.id === id);
+  if (!b) return;
+  state.currentPouringId = id;
+  document.getElementById('intake-list').style.display = 'none';
+  const detail = document.getElementById('intake-detail');
+  detail.style.display = 'block';
+  renderPouringDetail(b);
+  if (isPourOperatorRole()) {
+    document.body.classList.add('terminal-detail-open');
+    history.pushState({ terminalTask: id }, '');
+  }
+}
+
+function backToIntakeList() {
+  state.currentPouringId = null;
+  document.body.classList.remove('terminal-detail-open');
+  const detail = document.getElementById('intake-detail');
+  if (detail) detail.style.display = 'none';
+  const list = document.getElementById('intake-list');
+  if (list) list.style.display = 'block';
+  render();
+}
+
+function renderPouringDetail(b) {
+  const detail = document.getElementById('intake-detail');
+  if (!detail) return;
+  const canAct = canActOnPage('intake');
+  const st = pourTaskState(b);
+  const running = b.pouringStartedAt && !b.pouringEndedAt;
+  const ended = b.pouringStartedAt && b.pouringEndedAt;
+
+  // Однокнопочный поток
+  let actionHtml;
+  if (!canAct) {
+    actionHtml = `<div style="font-size:15px; font-weight:800; color:var(--text2); text-align:center;">${st.text}</div>`;
+  } else if (!b.pouringStartedAt) {
+    actionHtml = `<button class="btn btn-primary btn-full" onclick="startPouring('${b.id}')">Начать розлив</button>`;
+  } else if (running) {
+    actionHtml = `<div id="pouring-timer-${b.id}" style="font-size:14px; color:var(--accent); font-weight:700; text-align:center; margin-bottom:10px;"></div>
+      <button class="btn btn-danger btn-full" onclick="stopPouring('${b.id}')">Завершить розлив</button>`;
+  } else {
+    // ended, ждём ввода факта
+    const durationStr = formatDuration(new Date(b.pouringEndedAt) - new Date(b.pouringStartedAt));
+    actionHtml = `<div style="font-size:13px; color:var(--text2); text-align:center; margin-bottom:10px;">Розлив занял ${durationStr} · введите фактический выход (шт)</div>
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="intake-qty-${b.id}" class="ing-fact-input" placeholder="${b.planQty}" style="flex:1; font-size:20px; padding:12px;">
+        <button class="btn btn-success" onclick="saveIntakeQty('${b.id}')" style="flex-shrink:0; padding:0 20px;">Принять</button>
+      </div>`;
+  }
+
+  detail.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-batch-num">${b.id} · ${fmtDateHuman(b.pouringDate || b.brewDate)} · ${b.pouringLine}</div>
+      <div class="detail-product">${b.name}</div>
+      <div class="detail-meta">
+        <div class="detail-meta-item">Объём: <span>${b.volume} кг</span></div>
+        <div class="detail-meta-item">Тара: <span>${b.tara} л</span></div>
+        <div class="detail-meta-item">Выход план: <span>${b.planQty} шт</span></div>
+        <div class="detail-meta-item">Реактор: <span>${b.reactor}</span></div>
+        ${b.pouringStartedAt ? `<div class="detail-meta-item">Начат: <span>${new Date(b.pouringStartedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</span></div>` : ''}
+        ${ended ? `<div class="detail-meta-item">Завершён: <span>${new Date(b.pouringEndedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</span></div>` : ''}
+      </div>
+      ${b.commentForPouring ? `<div class="note" style="margin-top:8px; border-color:var(--accent);">💬 Комментарий от главного оператора: ${b.commentForPouring}</div>` : ''}
+      <div class="brewop-card-status-row" style="margin-top:10px;">
+        <span class="status-dot-ind status-dot-${st.color}"></span>
+        <span class="brewop-slabel">${st.text}</span>
+      </div>
+    </div>
+
+    <div class="card" style="text-align:center;">
+      ${actionHtml}
+    </div>
+  `;
+
+  updatePouringTimerDisplay(b);
+}
+
+function updatePouringTimerDisplay(b) {
+  if (!b || !b.pouringStartedAt || b.pouringEndedAt) return;
+  const el = document.getElementById(`pouring-timer-${b.id}`);
+  if (el) el.textContent = `Идёт: ${formatDuration(new Date() - new Date(b.pouringStartedAt))}`;
+}
+
 function startPouring(batchId) {
   if (!canDo('startPouring')) { showToast('Недостаточно прав'); return; }
   const b = state.batches.find(x => x.id === batchId);
@@ -5317,6 +5467,7 @@ function startPouring(batchId) {
   b.pouringStartedAt = new Date().toISOString();
   logActivity('Розлив начат', { target: b.id, after: { operator: b.pouringOperatorName, startedAt: b.pouringStartedAt } });
   saveState();
+  if (state.currentPouringId === batchId) renderPouringDetail(b);
   renderIntake();
   showToast(`Розлив ${batchId} начат`);
 }
@@ -5330,6 +5481,7 @@ function stopPouring(batchId) {
     text: `Оператор розлива завершил розлив партии ${b.id}, количество пока не введено.` });
   logActivity('Розлив завершён', { target: b.id, after: { endedAt: b.pouringEndedAt } });
   saveState();
+  if (state.currentPouringId === batchId) renderPouringDetail(b);
   renderIntake();
   showToast(`Розлив ${batchId} завершён · введите количество`);
 }
@@ -5347,6 +5499,8 @@ function saveIntakeQty(batchId) {
     text: `Оператор розлива завершил розлив партии ${b.id}. План: ${b.planQty} шт. Факт: ${qty} шт. Отклонение: ${devForLog > 0 ? '+' : ''}${devForLog}%.` });
   logActivity('Выход записан', { target: b.id, after: { factQty: qty, planQty: b.planQty, deviation: devForLog } });
   saveState();
+  // Партия принята и уходит из очереди розлива — закрываем детальный экран терминала
+  if (state.currentPouringId === batchId) backToIntakeList();
   renderIntake();
   render();
   const dev = devForLog;
@@ -6837,8 +6991,8 @@ function openZakladka(id) {
   renderZakladkaDetail(b);
   // Pushstate: перехватываем свайп-назад браузера — назад только через кнопку
   if (isBrewOperatorRole()) {
-    document.body.classList.add('brewop-detail-open');
-    history.pushState({ brewopTask: id }, '');
+    document.body.classList.add('terminal-detail-open');
+    history.pushState({ terminalTask: id }, '');
   }
 }
 
@@ -7071,10 +7225,17 @@ function updateZakladkaProgress(b) {
 
 function backToList() {
   state.currentBatchId = null;
-  document.body.classList.remove('brewop-detail-open');
+  document.body.classList.remove('terminal-detail-open');
   document.getElementById('warshchik-detail').style.display = 'none';
   document.getElementById('warshchik-list').style.display = 'block';
   render();
+}
+
+// Универсальная кнопка «Назад» в шапке терминала — закрывает открытое задание
+function terminalBack() {
+  const intakeDetail = document.getElementById('intake-detail');
+  if (intakeDetail && intakeDetail.style.display !== 'none') { backToIntakeList(); return; }
+  backToList();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -7359,37 +7520,41 @@ setInterval(() => {
   });
 }, 1000);
 
-// Блокировка свайпа-назад и pull-to-refresh для оператора варки
+// Возвращает открытый детальный overlay терминала (варка или розлив), либо null
+function _openTerminalDetail() {
+  const wd = document.getElementById('warshchik-detail');
+  if (wd && wd.style.display !== 'none') return wd;
+  const id = document.getElementById('intake-detail');
+  if (id && id.style.display !== 'none') return id;
+  return null;
+}
+
+// Блокировка свайпа-назад и pull-to-refresh для терминальных ролей (варка/розлив)
 let _touchStartY = 0, _touchStartX = 0;
 document.addEventListener('touchstart', function(e) {
-  if (!isBrewOperatorRole()) return;
+  if (!isTerminalRole()) return;
   _touchStartY = e.touches[0].clientY;
   _touchStartX = e.touches[0].clientX;
   // Слой 1: перехват левого края (iOS Safari swipe-back) в режиме задания
-  const detail = document.getElementById('warshchik-detail');
-  if (detail && detail.style.display !== 'none' && e.touches[0].clientX <= 25) e.preventDefault();
+  const detail = _openTerminalDetail();
+  if (detail && e.touches[0].clientX <= 25) e.preventDefault();
 }, { passive: false });
 
 // Слой 2: блокировка pull-to-refresh — если тянут вниз, а скролл-контейнер уже наверху
 document.addEventListener('touchmove', function(e) {
-  if (!isBrewOperatorRole()) return;
+  if (!isTerminalRole()) return;
   const dy = e.touches[0].clientY - _touchStartY;
   if (dy <= 0) return; // тянут вверх — обычный скролл, не мешаем
-  // Находим активный скролл-контейнер
-  const detail = document.getElementById('warshchik-detail');
-  const scroller = (detail && detail.style.display !== 'none')
-    ? detail
-    : document.querySelector('body.role-brewop .app-main');
+  const scroller = _openTerminalDetail() || document.querySelector('body.role-terminal .app-main');
   if (scroller && scroller.scrollTop <= 0) e.preventDefault(); // наверху + тянут вниз → не даём pull-to-refresh
 }, { passive: false });
 
-// Слой 2: popstate — если браузер всё же поп-нул state, возвращаемся обратно
+// Слой 3: popstate — если браузер всё же поп-нул state, возвращаемся обратно
 window.addEventListener('popstate', function() {
-  if (!isBrewOperatorRole()) return;
-  const detail = document.getElementById('warshchik-detail');
-  if (detail && detail.style.display !== 'none') {
-    history.pushState({ brewopTask: state.currentBatchId }, '');
-    backToList();
+  if (!isTerminalRole()) return;
+  if (_openTerminalDetail()) {
+    history.pushState({ terminalTask: state.currentBatchId }, '');
+    terminalBack();
   }
 });
 </script>
