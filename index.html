@@ -425,7 +425,9 @@
   #alarm-ticker.has-critical #alarm-ticker-inner.ticker-paused { transform: none !important; }
 
   /* ═══ LOGIN SCREEN — статичная, без свайпа ═══ */
-  .login-screen { position: fixed !important; inset: 0; overflow: hidden; touch-action: pan-x; }
+  .login-screen { position: fixed !important; inset: 0; overflow: hidden; touch-action: none; }
+  /* Поле пароля — тип text чтобы клавиатура не переключалась на латиницу, визуально скрываем символы */
+  .login-pwd-masked { -webkit-text-security: disc; text-security: disc; }
 
   /* ═══ REACTOR CARDS — новые карточки реакторов на участке варки ═══ */
   #reactor-tabs { gap: 10px; justify-content: center; }
@@ -447,12 +449,12 @@
      РОЛЬ «ОПЕРАТОР ВАРКИ» — полноэкранный мобильный терминал.
      Фиксированный layout: адресная строка не всплывает при скролле.
      ══════════════════════════════════════════════════════════════════ */
-  body.role-brewop { height: 100dvh; overflow: hidden; }
-  body.role-brewop #app-shell { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-  body.role-brewop .nav { height: 52px; min-height: 52px; flex-shrink: 0; padding: 0 14px; }
+  body.role-brewop { height: 100dvh; min-height: -webkit-fill-available; overflow: hidden; overscroll-behavior: none; }
+  body.role-brewop #app-shell { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+  body.role-brewop .nav { height: 52px; min-height: 52px; flex-shrink: 0; padding: 0 14px; overflow: hidden; }
   body.role-brewop .app-layout { flex: 1; min-height: 0; overflow: hidden; display: block; }
   body.role-brewop .sidebar { display: none !important; }
-  body.role-brewop .app-main { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  body.role-brewop .app-main { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   body.role-brewop .page { padding: 14px; box-sizing: border-box; }
 
   /* Скрываем лишнее */
@@ -467,9 +469,16 @@
   body.role-brewop #reactor-info-panel { display: none !important; }
   body.role-brewop #brewop-free-panel { display: none !important; }
 
-  /* Шапка */
-  body.role-brewop .nav-logo { font-size: 20px; }
+  /* Шапка: лого слева, роль по центру (absolute), кнопка выхода справа */
+  body.role-brewop .nav { position: relative; }
+  body.role-brewop .nav-logo { font-size: 20px; flex-shrink: 0; }
+  body.role-brewop #user-role-pill {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    font-size: 11px; font-weight: 800; max-width: 160px;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
   body.role-brewop .nav-right { margin-left: auto; padding-left: 0; gap: 8px; }
+  body.role-brewop .user-chip { position: static; }
   body.role-brewop .logout-label { display: none; }
   body.role-brewop .logout-btn { display: inline-flex; align-items: center; justify-content: center;
     background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px;
@@ -477,10 +486,11 @@
   .logout-icon { display: none; }
   body.role-brewop .logout-icon { display: block; }
 
-  /* Детальный вид задания — фиксированный overlay (без всплытия адресной строки) */
+  /* Детальный вид задания — фиксированный overlay, адресная строка не всплывает */
   body.role-brewop #warshchik-detail {
     position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
     overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     background: var(--bg); z-index: 150; padding: 14px; box-sizing: border-box;
   }
 
@@ -1257,7 +1267,7 @@
     </div>
     <div class="form-group">
       <label>Пароль</label>
-      <input type="password" id="login-password" placeholder="Введите пароль" onkeydown="if(event.key==='Enter') doLogin()" />
+      <input type="text" id="login-password" placeholder="Введите пароль" inputmode="text" autocomplete="current-password" class="login-pwd-masked" onkeydown="if(event.key==='Enter') doLogin()" />
     </div>
 
     <button class="btn btn-primary btn-full" onclick="doLogin()">Войти</button>
@@ -7320,12 +7330,21 @@ setInterval(() => {
   });
 }, 1000);
 
-// Перехват свайпа-назад браузера для оператора варки — назад только через кнопку
+// Блокировка свайпа-назад браузера для оператора варки
+// Слой 1: перехват левого края экрана (iOS Safari swipe-back gesture)
+document.addEventListener('touchstart', function(e) {
+  if (!isBrewOperatorRole()) return;
+  const detail = document.getElementById('warshchik-detail');
+  if (detail && detail.style.display !== 'none') {
+    if (e.touches[0].clientX <= 25) e.preventDefault();
+  }
+}, { passive: false });
+
+// Слой 2: popstate — если браузер всё же поп-нул state, возвращаемся обратно
 window.addEventListener('popstate', function() {
   if (!isBrewOperatorRole()) return;
   const detail = document.getElementById('warshchik-detail');
   if (detail && detail.style.display !== 'none') {
-    // Возвращаем state в историю чтобы свайп снова не вышел
     history.pushState({ brewopTask: state.currentBatchId }, '');
     backToList();
   }
