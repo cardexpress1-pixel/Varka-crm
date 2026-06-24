@@ -587,6 +587,13 @@
   .reactor-card.rcard-gray .reactor-card-icon { color: rgba(100,116,139,.5); }
   .reactor-card.rcard-gray .reactor-card-status { background: rgba(100,116,139,.1); color: rgba(100,116,139,.7); }
 
+  /* Забронирована (линия розлива зарезервирована заранее, варка ещё идёт) — спокойный янтарный.
+     Без rcard-yellow карточка брала базовую border:2px solid currentColor → тёмная рамка. */
+  .reactor-card.rcard-yellow { border-color: rgba(234,179,8,.45); }
+  .reactor-card.rcard-yellow .reactor-card-name { color: rgba(180,130,8,.6); }
+  .reactor-card.rcard-yellow .reactor-card-icon { color: rgba(180,130,8,.55); }
+  .reactor-card.rcard-yellow .reactor-card-status { background: rgba(234,179,8,.13); color: rgba(161,98,7,.9); }
+
   @keyframes rcardGlowGreen  { 0%,100%{box-shadow:inset 0 0 4px 1px rgba(5,150,105,.08);}  50%{box-shadow:inset 0 0 18px 4px rgba(5,150,105,.28);}  }
   @keyframes rcardGlowBlue   { 0%,100%{box-shadow:inset 0 0 4px 1px rgba(37,99,235,.08);}  50%{box-shadow:inset 0 0 18px 4px rgba(37,99,235,.28);}  }
   @keyframes rcardGlowRed    { 0%,100%{box-shadow:inset 0 0 4px 1px rgba(239,68,68,.08);}  50%{box-shadow:inset 0 0 18px 4px rgba(239,68,68,.28);}  }
@@ -599,6 +606,7 @@
   body.theme-light .reactor-card.rcard-red .reactor-card-status { background: rgba(239,68,68,.12); }
   body.theme-light .reactor-card.rcard-orange .reactor-card-status { background: rgba(245,158,11,.12); }
   body.theme-light .reactor-card.rcard-gray .reactor-card-status { background: rgba(100,116,139,.14); }
+  body.theme-light .reactor-card.rcard-yellow .reactor-card-status { background: rgba(234,179,8,.18); }
 
   /* ── Reactor card icon hover animations ── */
   .rci { transition: stroke .15s; }
