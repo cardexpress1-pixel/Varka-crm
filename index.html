@@ -3420,6 +3420,7 @@ function render() {
     ['renderRequests', renderRequests],
     ['renderWarshchikBatches', renderWarshchikBatches],
     ['renderIntake', renderIntake],
+    ['renderCalendar', renderCalendar],
     ['renderReports', renderReports],
     ['renderJournal', renderJournal],
     ['renderRecipes', renderRecipes],
@@ -6993,7 +6994,13 @@ function createBatch() {
 // ════════════════════════════════════════════════════════════════════════════
 function openBatchActions(id) {
   const b = getBatchById(id);
-  if (!b) return;
+  // Защита от клика по устаревшему событию (варку успели удалить, а DOM не обновился):
+  // не открываем окно мёртвой варки — сообщаем и перерисовываем календарь.
+  if (!b || b.status === 'deleted') {
+    showToast('Эта варка была удалена — календарь обновлён');
+    renderCalendar();
+    return;
+  }
   const canReschedule = b.status !== 'done' && b.status !== 'deleted' && b.status !== 'cancelled';
 
   let modal = document.getElementById('modal-actions');
