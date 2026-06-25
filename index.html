@@ -1208,25 +1208,31 @@
    Анимируется ТОЛЬКО верхний лист .calendar-sheet внутри SVG-иконки .ni-calendar.
    Под ним статичный .ni-cal-next — «следующий лист», который остаётся после переворота.
    Рамка, кольца, шапка и любые контейнеры страницы НЕ анимируются. */
+/* В покое календарь — обычный контур, как все иконки: листы скрыты. */
+.ni-calendar .calendar-sheet,
+.ni-calendar .ni-cal-next { opacity: 0; }
 .ni-calendar .calendar-sheet {
   transform-box: fill-box;
-  transform-origin: top center;       /* верхний край закреплён */
+  transform-origin: center top;       /* верхний край закреплён, строго по центру по X */
   will-change: transform, opacity;
-  filter: drop-shadow(0 1px 1px rgba(2, 8, 20, .4)); /* тень для объёма перелистываемого листа */
+  /* симметричная тень без смещения — не уводит лист вбок при наклоне */
+  filter: drop-shadow(0 0 0.7px rgba(2, 8, 20, .35));
 }
+/* Листы появляются и перелистываются только при наведении. */
+.nav-tab:hover .ni-calendar .ni-cal-next,
+.nav-tab:focus-visible .ni-calendar .ni-cal-next { opacity: .3; }
 .nav-tab:hover .ni-calendar .calendar-sheet,
 .nav-tab:focus-visible .ni-calendar .calendar-sheet {
   animation: calendar-flip 1.2s ease-in-out infinite;
 }
 @keyframes calendar-flip {
-  0%   { transform: perspective(50px) rotateX(0deg);    opacity: 1; }  /* лист лежит ровно сверху */
-  14%  { transform: perspective(50px) rotateX(-6deg);   opacity: 1; }  /* нижний край медленно приподнимается */
-  40%  { transform: perspective(50px) rotateX(-72deg);  opacity: 1; }  /* поднимается к вертикали */
-  58%  { transform: perspective(50px) rotateX(-104deg); opacity: .9; } /* прошёл вертикаль — заваливается НАЗАД */
-  75%  { transform: perspective(50px) rotateX(-150deg); opacity: .45; }/* уходит за верхний край, под следующий лист */
-  88%  { transform: perspective(50px) rotateX(-178deg); opacity: 0; }  /* спрятался под следующим листом */
-  89%  { transform: perspective(50px) rotateX(0deg);    opacity: 0; }  /* скрытый сброс */
-  100% { transform: perspective(50px) rotateX(0deg);    opacity: 1; }  /* плавно проявляется новый верхний лист */
+  0%   { transform: scaleY(1);     opacity: 1; }  /* лист лежит ровно, строго по центру */
+  14%  { transform: scaleY(0.92);  opacity: 1; }  /* начинает складываться вверх */
+  50%  { transform: scaleY(0.12);  opacity: 1; }  /* сложился к тонкой линии у верхнего края */
+  72%  { transform: scaleY(-0.5);  opacity: .5; } /* прошёл вертикаль, уходит назад под следующий лист */
+  88%  { transform: scaleY(-0.95); opacity: 0; }  /* спрятался под следующим листом */
+  89%  { transform: scaleY(1);     opacity: 0; }  /* скрытый сброс */
+  100% { transform: scaleY(1);     opacity: 1; }  /* плавно проявляется новый верхний лист */
 }
 @media (prefers-reduced-motion: reduce) {
   .nav-tab:hover .ni-calendar .calendar-sheet,
