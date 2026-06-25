@@ -2505,10 +2505,11 @@ async function loadState() {
       const snap = await db.collection('varka').doc('state').get();
       if (snap.exists) {
         state = { ...state, ...snap.data() };
+        _baseRev = snap.data()._rev || 0; // запоминаем версию, на которой основаны локальные данные
         try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
         fromFirestore = true;
         _stateLoadedFromFirestore = true;
-        console.info('[Firestore] состояние загружено');
+        console.info('[Firestore] состояние загружено · rev', _baseRev);
       } else {
         console.warn('[Firestore] документ пуст — ждём данных, в Firestore ничего не пишем');
         _stateLoadedFromFirestore = false;
@@ -2693,8 +2694,34 @@ function saveState() {
   if (saveState._t) clearTimeout(saveState._t);
   saveState._t = setTimeout(() => {
     _snapshotIgnoreUntil = Date.now() + 3000;
-    db.collection('varka').doc('state').set(JSON.parse(JSON.stringify(state)))
-      .catch(err => console.error('[Firestore] saveState:', err));
+    const ref = db.collection('varka').doc('state');
+    // Запись через транзакцию с проверкой версии: если в облаке уже более новая
+    // версия (чужое устройство успело записать) — НЕ затираем её устаревшим
+    // состоянием. Это защита от массового отката данных «старым» табом/устройством.
+    db.runTransaction(async tx => {
+      const doc = await tx.get(ref);
+      const remoteRev = doc.exists ? (doc.data()._rev || 0) : 0;
+      if (remoteRev > _baseRev) {
+        const e = new Error('stale'); e._stale = true; e._remote = doc.data(); throw e;
+      }
+      const newRev = remoteRev + 1;
+      state._rev = newRev;
+      state._updatedAt = new Date().toISOString();
+      tx.set(ref, JSON.parse(JSON.stringify(state)));
+      return newRev;
+    }).then(newRev => {
+      _baseRev = newRev;
+    }).catch(err => {
+      if (err && err._stale) {
+        // Наше состояние устарело — принимаем свежее из облака, локальную запись отменяем.
+        console.warn('[Firestore] saveState отменён: в облаке более свежая версия (rev ' +
+          ((err._remote && err._remote._rev) || '?') + ' > base ' + _baseRev + '). Принимаю свежие данные.');
+        _applyRemoteState(err._remote);
+        if (typeof showToast === 'function') showToast('Данные обновлены на другом устройстве — проверьте и повторите действие');
+      } else {
+        console.error('[Firestore] saveState:', err);
+      }
+    });
   }, 600);
 }
 
@@ -2742,32 +2769,61 @@ async function writeUserProfile(roleId) {
   } catch(err) { console.error('[Firestore] writeUserProfile:', err); }
 }
 
+// Применяет ВХОДЯЩЕЕ состояние из Firestore к локальному без обратной записи.
+// Используется и реал-тайм подпиской (onSnapshot), и защитой от устаревшей записи
+// (когда наша запись отменена, потому что в облаке оказалась более свежая версия).
+function _applyRemoteState(data) {
+  if (!data) return;
+  _applyingRemoteState = true;
+  try {
+    state = { ...state, ...data };
+    _baseRev = data._rev || 0; // теперь локальные данные основаны на этой версии
+    try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
+    applyStateMigrations();
+    render();
+    const p = document.querySelector('.page.active');
+    if (p) {
+      const pid = p.id.replace('page-', '');
+      if      (pid === 'warshchik')  renderWarshchikBatches();
+      else if (pid === 'intake')     renderIntake();
+      else if (pid === 'production') renderProductionManagement();
+      else if (pid === 'weekplan')   renderWeekPlan();
+      else if (pid === 'calendar')   renderCalendar();
+      else if (pid === 'reports')    renderReports();
+      else if (pid === 'journal')    renderJournal();
+      else if (pid === 'dashboard')  renderDashboard();
+    }
+  } finally { _applyingRemoteState = false; }
+}
+
 function setupFirestoreSync() {
   if (!db) return;
   db.collection('varka').doc('state').onSnapshot(snap => {
-    if (!snap.exists || Date.now() < _snapshotIgnoreUntil) return;
-    // применяем входящее состояние из Firestore без обратной записи (saveState подавлён флагом)
-    _applyingRemoteState = true;
-    try {
-      state = { ...state, ...snap.data() };
-      try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
-      applyStateMigrations();
-      render();
-      const p = document.querySelector('.page.active');
-      if (p) {
-        const pid = p.id.replace('page-', '');
-        if      (pid === 'warshchik')  renderWarshchikBatches();
-        else if (pid === 'intake')     renderIntake();
-        else if (pid === 'production') renderProductionManagement();
-        else if (pid === 'weekplan')   renderWeekPlan();
-        else if (pid === 'calendar')   renderCalendar();
-        else if (pid === 'reports')    renderReports();
-        else if (pid === 'journal')    renderJournal();
-        else if (pid === 'dashboard')  renderDashboard();
-      }
-    } finally { _applyingRemoteState = false; }
+    if (!snap.exists) return;
+    // Даже в окне подавления (после нашей же записи) обновляем _baseRev — чтобы знать
+    // самую свежую версию и не считать себя «устаревшими» из-за собственного эха.
+    if (Date.now() < _snapshotIgnoreUntil) {
+      const r = snap.data()._rev || 0;
+      if (r > _baseRev) _baseRev = r;
+      return;
+    }
+    _applyRemoteState(snap.data());
   }, err => console.error('[Firestore] sync:', err));
 }
+
+// Принудительный ресинк при возврате к вкладке: фоновый/«уснувший» таб мог пропустить
+// обновления. Подтягиваем свежий документ ДО того, как пользователь что-то нажмёт,
+// чтобы устаревший таб не работал поверх протухших данных.
+function _resyncFromFirestore() {
+  if (!db) return;
+  db.collection('varka').doc('state').get().then(snap => {
+    if (!snap.exists) return;
+    const r = snap.data()._rev || 0;
+    if (r > _baseRev) _applyRemoteState(snap.data());
+  }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) _resyncFromFirestore(); });
+window.addEventListener('focus', _resyncFromFirestore);
 
 function logActivity(action, opts) {
   if (!db) return;
@@ -3380,6 +3436,11 @@ let _snapshotIgnoreUntil = 0;
 let _applyingRemoteState = false; // true, пока применяем ВХОДЯЩЕЕ обновление (storage другой вкладки / onSnapshot Firestore) — saveState не пишет обратно, иначе вкладки зацикливают друг друга
 let _stateLoadedFromFirestore = false;
 let _firebaseError = false;
+// Версия документа Firestore, которую мы СЕЙЧАС считаем актуальной. Любая запись идёт
+// через транзакцию: если в Firestore уже более новая версия (чужое устройство успело
+// записать) — мы НЕ затираем её своим устаревшим состоянием, а принимаем свежее.
+// Это защита от массового отката данных «старым» табом/устройством.
+let _baseRev = 0;
 
 // ── pmStage: ЛОКАЛЬНЫЙ UI-выбор карточки-стадии в «Управлении производством» ──
 // Намеренно НЕ в state и НЕ в Firestore: это выбор конкретного устройства,
