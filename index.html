@@ -4778,7 +4778,6 @@ function generateProductionFromWeekPlan() {
   const runningLoadsByDate = {};
   const conflicts = [];
   let createdCount = 0;
-  const qtyBySku = {}; // сколько шт по каждому продукту реально сформировано в этом проходе — прибавим к остатку на складе
 
   toGenerate.forEach(item => {
     const { sku, recipe, date, qty } = item;
@@ -4803,18 +4802,14 @@ function generateProductionFromWeekPlan() {
     });
     state.batches.push(batch);
     createdCount++;
-    qtyBySku[sku] = (qtyBySku[sku] || 0) + qty;
 
     if (!state.wpGenerated[state.wpWeekStart]) state.wpGenerated[state.wpWeekStart] = {};
     if (!state.wpGenerated[state.wpWeekStart][sku]) state.wpGenerated[state.wpWeekStart][sku] = {};
     state.wpGenerated[state.wpWeekStart][sku][date] = { batchId: batch.id, qty };
   });
 
-  // прибавляем сформированное количество к остатку на складе по каждому продукту —
-  // иначе после обнуления плана получится, что мы "сварили", но склад этого не увидел
-  Object.keys(qtyBySku).forEach(sku => {
-    state.stockLevels[sku] = (state.stockLevels[sku] || 0) + qtyBySku[sku];
-  });
+  // Остаток склада НЕ трогаем автоматически: он вносится только вручную (wpSetStock).
+  // Раньше здесь сваренное прибавлялось к stockLevels — по требованию убрано.
 
   // спрос и план варки НЕ очищаем — пользователь должен видеть
   // полную картину: заказы и план рядом со сформированными партиями.
