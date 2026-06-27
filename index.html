@@ -3198,8 +3198,9 @@ function getBatchStage(b) {
   if (b.status !== 'done' && !b.brewEndedAt) return 'brewing';
 
   // варка завершена (status done или есть метка финиша)
-  if (!b.sentToPouring) return 'brewed';
-  if (!b.pouringEndedAt) return 'pouring'; // передано в розлив — независимо от того, нажал ли оператор «Начать» физически
+  // «Сварено» — пока оператор розлива не нажал «Начать розлив» (pouringStartedAt)
+  if (!b.sentToPouring || !b.pouringStartedAt) return 'brewed';
+  if (!b.pouringEndedAt) return 'pouring';
   if (b.factQty === null || b.factQty === undefined) return 'poured';
   return 'finished';
 }
@@ -5671,8 +5672,8 @@ function startPouring(batchId) {
   b.pouringStartedAt = new Date().toISOString();
   logActivity('Розлив начат', { target: b.id, after: { operator: b.pouringOperatorName, startedAt: b.pouringStartedAt } });
   saveState();
+  render();
   if (state.currentPouringId === batchId) renderPouringDetail(b);
-  renderIntake();
   showToast(`Розлив ${batchId} начат`);
 }
 
@@ -7352,13 +7353,13 @@ function stopBrewTimer(id) {
   logActivity('Варка завершена', { target: b.id, after: { product: b.name, reactor: b.reactor, endedAt: b.brewEndedAt } });
   b.sentToBrewing = true; // гарантия: партия попадёт в 'brewed', а не застрянет в 'queued'
 
-  // Если линия розлива уже назначена главным оператором — автоматически передаём
-  // в розлив без лишнего ручного шага. Оператор розлива увидит партию сразу.
+  // Если линия розлива уже назначена — передаём в очередь розлива (оператор увидит),
+  // но в PM-доске партия остаётся в «Сварено» до нажатия «Начать розлив».
   if (b.pouringLine) {
     b.sentToPouring = true;
     if (!b.pouringDate) b.pouringDate = fmtDate(new Date());
-    logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'pouring',
-      text: `Варщик завершил варку партии ${b.id}. Линия «${b.pouringLine}» уже назначена — партия автоматически передана в розлив.` });
+    logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewed',
+      text: `Варщик завершил варку партии ${b.id}. Линия «${b.pouringLine}» назначена — ожидает начала розлива оператором.` });
   } else {
     logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewed',
       text: `Варщик завершил варку партии ${b.id}. Ожидает назначения линии розлива.` });
@@ -7366,7 +7367,7 @@ function stopBrewTimer(id) {
 
   saveState();
   render();
-  showToast(b.pouringLine ? `Варка ${id} завершена — передана в розлив (${b.pouringLine})` : `Варка ${id} завершена`);
+  showToast(b.pouringLine ? `Варка ${id} завершена — ожидает розлива (${b.pouringLine})` : `Варка ${id} завершена`);
   backToList();
 }
 
@@ -7770,5 +7771,21 @@ window.addEventListener('popstate', function() {
     terminalBack();
   }
 });
+
+// Мобильная клавиатура: при открытии клавиатуры сдвигаем нижнюю границу
+// детального overlay (варка/розлив) так, чтобы список сырья оставался скроллируемым
+function _adjustTerminalDetailForKeyboard() {
+  const detail = _openTerminalDetail();
+  if (!detail) return;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  // Высота клавиатуры = разница между высотой окна и видимым viewport
+  const kbHeight = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+  detail.style.bottom = kbHeight ? kbHeight + 'px' : '';
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', _adjustTerminalDetailForKeyboard);
+  window.visualViewport.addEventListener('scroll', _adjustTerminalDetailForKeyboard);
+}
 </script>
 </body></html>
