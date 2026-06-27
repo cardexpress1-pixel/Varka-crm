@@ -3107,7 +3107,7 @@ function calcIngredients(sku, volume) {
   const ratio = volume / recipe.baseBatch;
   return recipe.ingredients.map(ing => ({
     ...ing,
-    normFact: ing.unit === 'г' ? Math.round(ing.norm * ratio) : Math.round(ing.norm * ratio * 10) / 10
+    normFact: Math.round(ing.norm * ratio * 1000) / 1000
   }));
 }
 function nextBatchId() {
@@ -5806,8 +5806,8 @@ function renderReports() {
         const devColor = dev === null ? 'var(--text3)' : Math.abs(dev) <= 5 ? 'var(--accent2)' : 'var(--warn)';
         return `<tr class="report-group-row" data-group="${groupId}" style="border-bottom:1px solid var(--border); display:none;">
           <td style="padding:6px 6px 6px 24px; color:var(--text2);">${ing.name}</td>
-          <td style="padding:6px 6px; text-align:right;">${Math.round(ing.norm*10)/10} ${ing.unit}</td>
-          <td style="padding:6px 6px; text-align:right; color:${ing.hasFact?'var(--text)':'var(--text3)'};">${ing.hasFact ? Math.round(ing.fact*10)/10+' '+ing.unit : '—'}</td>
+          <td style="padding:6px 6px; text-align:right;">${Math.round(ing.norm*1000)/1000} ${ing.unit}</td>
+          <td style="padding:6px 6px; text-align:right; color:${ing.hasFact?'var(--text)':'var(--text3)'};">${ing.hasFact ? Math.round(ing.fact*1000)/1000+' '+ing.unit : '—'}</td>
           <td style="padding:6px 6px; text-align:right; color:${devColor};">${dev !== null ? (dev>0?'+':'')+dev.toFixed(1)+'%' : '—'}</td>
         </tr>`;
       }).join('');
@@ -5912,8 +5912,8 @@ function exportReportToExcel() {
       const dev = ing.hasFact && ing.norm ? ((ing.fact - ing.norm) / ing.norm * 100) : null;
       rows.push([
         ing.name,
-        `${Math.round(ing.norm*10)/10} ${ing.unit}`,
-        ing.hasFact ? `${Math.round(ing.fact*10)/10} ${ing.unit}` : '—',
+        `${Math.round(ing.norm*1000)/1000} ${ing.unit}`,
+        ing.hasFact ? `${Math.round(ing.fact*1000)/1000} ${ing.unit}` : '—',
         dev !== null ? (dev>0?'+':'')+dev.toFixed(1)+'%' : '—'
       ]);
     });
