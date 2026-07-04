@@ -4291,10 +4291,11 @@ function renderReactorCards() {
     const loadH = rb.reduce((s, b) => s + (b.brewHours || 0), 0);
 
     let stTxt, stCol, cur = null;
+    // Светофор: 🟢 работает (Варит/Розлив) · 🟡 Ожидание · 🔴 Простой
     if (brewing) { stTxt = 'Варит'; stCol = 'var(--accent2)'; cur = brewing; workingCount++; }
-    else if (pouring) { stTxt = 'Розлив'; stCol = 'var(--accent)'; cur = pouring; workingCount++; }
+    else if (pouring) { stTxt = 'Розлив'; stCol = 'var(--accent2)'; cur = pouring; workingCount++; }
     else if (waiting) { stTxt = 'Ожидание'; stCol = 'var(--warn)'; cur = waiting; }
-    else { stTxt = 'Простой'; stCol = 'var(--text3)'; cur = doneB[doneB.length - 1] || null; }
+    else { stTxt = 'Простой'; stCol = 'var(--danger)'; cur = doneB[doneB.length - 1] || null; }
 
     let timeRow = '';
     if (brewing && brewing.brewStartedAt) {
