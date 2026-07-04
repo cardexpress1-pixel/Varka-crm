@@ -1480,11 +1480,7 @@ body.theme-light #page-dashboard .dash-kpi{box-shadow:0 1px 3px rgba(20,30,60,.0
   <div class="dash-card">
     <div class="dash-card-h">
       <div class="dash-card-t">Выпуск по дням</div>
-      <div class="dash-week-nav">
-        <button class="cal-nav-btn" onclick="dashWeekShift(-1)">‹</button>
-        <span id="bi-week-label" class="dash-wk-label">—</span>
-        <button class="cal-nav-btn" onclick="dashWeekShift(1)">›</button>
-      </div>
+      <span class="dash-badge">текущая неделя</span>
     </div>
     <div class="dash-days" id="bi-week-tiles"></div>
     <div class="dash-week-sum" id="bi-week-sum"></div>
@@ -1506,22 +1502,6 @@ body.theme-light #page-dashboard .dash-kpi{box-shadow:0 1px 3px rgba(20,30,60,.0
       <div id="bi-deviation-list"></div>
     </div>
   </div>
-
-  <div class="divider"></div>
-
-  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-    <div style="font-size:15px; font-weight:700;">Оперативно за день</div>
-    <div style="font-size:12px; color:var(--text2);" id="dash-reactor-date-label">—</div>
-  </div>
-
-  <div class="grid-stats" id="stats-grid">
-    <div class="stat-box"><div class="stat-num" id="s-total">0</div><div class="stat-lbl" id="s-total-lbl">Варок за день</div></div>
-    <div class="stat-box"><div class="stat-num s-active" id="s-active">0</div><div class="stat-lbl">В работе</div></div>
-    <div class="stat-box"><div class="stat-num s-done" id="s-done">0</div><div class="stat-lbl">Готово</div></div>
-    <div class="stat-box"><div class="stat-num s-new" id="s-requests">0</div><div class="stat-lbl">Новых заявок</div></div>
-  </div>
-
-  <div id="reactor-dashboard" style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px;"></div>
 
 </div>
 
@@ -4189,10 +4169,11 @@ function renderDashboard() {
   if (totalLbl) totalLbl.textContent = isToday ? 'Варок сегодня' : 'Варок в этот день';
 
   const dayBatches = state.batches.filter(b => b.brewDate === viewDate && b.status !== 'deleted');
-  document.getElementById('s-total').textContent = dayBatches.length;
-  document.getElementById('s-active').textContent = dayBatches.filter(b=>b.status==='active').length;
-  document.getElementById('s-done').textContent = dayBatches.filter(b=>b.status==='done').length;
-  document.getElementById('s-requests').textContent = isToday ? state.requests.filter(r=>r.status==='new').length : state.requests.filter(r=>r.brewDate===viewDate && r.status==='new').length;
+  const _setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  _setTxt('s-total', dayBatches.length);
+  _setTxt('s-active', dayBatches.filter(b=>b.status==='active').length);
+  _setTxt('s-done', dayBatches.filter(b=>b.status==='done').length);
+  _setTxt('s-requests', isToday ? state.requests.filter(r=>r.status==='new').length : state.requests.filter(r=>r.brewDate===viewDate && r.status==='new').length);
 
   if (el && !state.reactors.length) { el.innerHTML = ''; }
   else if (el) {
