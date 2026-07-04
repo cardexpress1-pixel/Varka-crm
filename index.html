@@ -1408,6 +1408,22 @@
 #page-dashboard .dash-pulse-cell.dp-status{display:flex;flex-direction:column;justify-content:center;}
 @media(max-width:1100px){#page-dashboard .dash-pulse{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:640px){#page-dashboard .dash-pulse{grid-template-columns:repeat(2,1fr);}}
+/* Реакторы (Уровень 2) */
+#page-dashboard .dash-reactors{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px;margin-bottom:16px;}
+#page-dashboard .rc2{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;}
+#page-dashboard .rc2-h{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+#page-dashboard .rc2-badge{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;}
+#page-dashboard .rc2-name{font-size:14px;font-weight:800;flex:1;}
+#page-dashboard .rc2-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
+#page-dashboard .rc2-prod{font-size:12.5px;color:var(--text2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;}
+#page-dashboard .rc2-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;}
+#page-dashboard .rc2-k{color:var(--text3);}
+#page-dashboard .rc2-v{font-weight:700;}
+#page-dashboard .rc2-metrics{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--text2);border-top:1px solid var(--border);padding-top:9px;}
+#page-dashboard .rc2-metrics b{color:var(--text);font-weight:700;}
+/* 2-колоночная аналитика */
+#page-dashboard .dash-2col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:760px){#page-dashboard .dash-2col{grid-template-columns:1fr;}}
 /* week day tiles */
 #page-dashboard .dash-week-nav{display:flex;align-items:center;gap:8px;}
 #page-dashboard .dash-wk-label{font-size:12.5px;color:var(--text2);font-weight:600;min-width:150px;text-align:center;}
@@ -1458,7 +1474,8 @@
 #page-dashboard .dash-empty{padding:22px;text-align:center;font-size:13px;color:var(--text3);}
 body.theme-light #page-dashboard .dash-card,
 body.theme-light #page-dashboard .dash-kpi,
-body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,30,60,.06), 0 1px 2px rgba(20,30,60,.04);}
+body.theme-light #page-dashboard .dash-pulse-cell,
+body.theme-light #page-dashboard .rc2{box-shadow:0 1px 3px rgba(20,30,60,.06), 0 1px 2px rgba(20,30,60,.04);}
 @media(max-width:560px){#page-dashboard .dash-days{gap:6px;}#page-dashboard .dash-day-tile{height:90px;}#page-dashboard .dash-day-val{font-size:12px;}}
 </style>
 <div class="page page-wide" id="page-dashboard">
@@ -1489,6 +1506,13 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
   <!-- Уровень 1 — Пульс дня -->
   <div class="dash-pulse" id="bi-pulse"></div>
 
+  <!-- Уровень 2 — Реакторы -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin:2px 0 10px;">
+    <div style="font-size:15px; font-weight:700;">Реакторы</div>
+    <span class="dash-badge" id="dash-reactors-badge">—</span>
+  </div>
+  <div class="dash-reactors" id="dash-reactor-cards"></div>
+
   <!-- Выпуск по дням — недельные плитки -->
   <div class="dash-card">
     <div class="dash-card-h">
@@ -1499,12 +1523,8 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
     <div class="dash-week-sum" id="bi-week-sum"></div>
   </div>
 
-  <!-- Три аналитических блока -->
-  <div class="grid-3">
-    <div class="dash-card" style="margin-bottom:0;">
-      <div class="dash-card-h"><div class="dash-card-t">Загрузка реакторов</div><span class="dash-badge" id="bi-react-badge">—</span></div>
-      <div id="bi-reactor-load-list"></div>
-    </div>
+  <!-- Аналитика: линии розлива + выполнение плана -->
+  <div class="dash-2col">
     <div class="dash-card" style="margin-bottom:0;">
       <div class="dash-card-h"><div class="dash-card-t">Линии розлива</div><span class="dash-badge">доля выпуска</span></div>
       <div class="dash-stack" id="bi-lines-stack"></div>
@@ -4243,6 +4263,66 @@ function setBiPeriod(days, btn) {
   renderBiAnalytics();
 }
 
+// Уровень 2 «Реакторы» — карточки Р-1…Р-N: live-статус, продукт, время факт/норматив, выпуск за день.
+const DASH_IDLE_HOURS = 2; // порог «Простой»: если реактор без активной варки и последняя активность старше N часов
+function renderReactorCards() {
+  const el = document.getElementById('dash-reactor-cards');
+  if (!el) return;
+  const viewDate = state.dashDate || fmtDate(new Date());
+  const isToday = viewDate === fmtDate(new Date());
+  const now = isToday ? new Date() : new Date(viewDate + 'T23:59:59');
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const fmtHM = ms => { const m = Math.max(0, Math.round(ms / 60000)); return Math.floor(m / 60) + 'ч ' + String(m % 60).padStart(2, '0') + 'м'; };
+
+  if (!state.reactors.length) { el.innerHTML = `<div class="dash-empty">Нет реакторов</div>`; return; }
+  let workingCount = 0;
+  el.innerHTML = state.reactors.map((r, i) => {
+    const rc = (i % 8) + 1;
+    const rb = state.batches.filter(b => b.reactor === r && b.brewDate === viewDate && b.status !== 'deleted' && b.status !== 'cancelled');
+    const active = rb.filter(b => b.status !== 'done');   // готовые не участвуют в текущем статусе
+    const brewing = active.find(b => getBatchStage(b) === 'brewing');
+    const pouring = active.find(b => getBatchStage(b) === 'pouring');
+    const waiting = active.find(b => ['queued', 'assigned'].includes(getBatchStage(b)));
+    const doneB = rb.filter(b => b.status === 'done');
+    const factQty = doneB.reduce((s, b) => s + (b.factQty || 0), 0);
+    const factKg = doneB.reduce((s, b) => s + (b.factQty || 0) * taraOf(b), 0);
+    const loadH = rb.reduce((s, b) => s + (b.brewHours || 0), 0);
+
+    let stTxt, stCol, cur = null;
+    if (brewing) { stTxt = 'Варит'; stCol = 'var(--accent2)'; cur = brewing; workingCount++; }
+    else if (pouring) { stTxt = 'Розлив'; stCol = 'var(--accent)'; cur = pouring; workingCount++; }
+    else if (waiting) { stTxt = 'Ожидание'; stCol = 'var(--warn)'; cur = waiting; }
+    else { stTxt = 'Простой'; stCol = 'var(--text3)'; cur = doneB[doneB.length - 1] || null; }
+
+    let timeRow = '';
+    if (brewing && brewing.brewStartedAt) {
+      const factMs = now - new Date(brewing.brewStartedAt);
+      const normH = (recBySku[brewing.sku] && recBySku[brewing.sku].brewHours) || brewing.brewHours || 0;
+      const over = normH && (factMs / 3600000) > normH;
+      timeRow = `<div class="rc2-row"><span class="rc2-k">Время варки</span><span class="rc2-v" style="color:${over ? 'var(--danger)' : 'var(--text)'}">${fmtHM(factMs)} / ${normH}ч</span></div>`;
+    }
+    const prod = cur ? cur.name : '—';
+    return `<div class="rc2">
+      <div class="rc2-h">
+        <div class="rc2-badge" style="background:var(--r${rc})">${r}</div>
+        <div class="rc2-name">${r}</div>
+        <span class="rc2-status" style="color:${stCol};background:color-mix(in srgb, ${stCol} 14%, transparent)">${stTxt}</span>
+      </div>
+      <div class="rc2-prod" title="${prod}">${prod}</div>
+      ${timeRow}
+      <div class="rc2-metrics">
+        <div><b>${doneB.length}</b> ${pluralRu(doneB.length,'варка','варки','варок')} за день</div>
+        <div>выпуск <b>${nf(factKg)}</b> кг · ${nf(factQty)} шт</div>
+        <div>загрузка <b>${loadH}</b>/${state.workdayHours} ч</div>
+      </div>
+    </div>`;
+  }).join('');
+  const badge = document.getElementById('dash-reactors-badge');
+  if (badge) badge.textContent = workingCount + ' из ' + state.reactors.length + ' в работе';
+}
+
 // Уровень 1 «Пульс дня» — 6 показателей по выбранной дате.
 // Основа — ОБЪЁМ (кг, от тары не зависит), штуки показываем рядом.
 // Объём варки = b.volume; если не заполнен (историч. данные) — оцениваем planQty×тара из рецепта.
@@ -4303,29 +4383,8 @@ function renderBiAnalytics() {
   const doneBatches = periodBatches.filter(b => b.status === 'done');
   const nf = n => (n||0).toLocaleString('ru-RU');
 
-  // ── Загрузка реакторов за период ──
-  const loadList = document.getElementById('bi-reactor-load-list');
-  if (loadList) {
-    if (!state.reactors.length) {
-      loadList.innerHTML = `<div class="dash-empty">Нет реакторов</div>`;
-    } else {
-      let avgAcc = 0;
-      loadList.innerHTML = state.reactors.map((r,i) => {
-        const rHours = periodBatches.filter(b => b.reactor === r && b.status !== 'cancelled').reduce((s,b)=>s+(b.brewHours||0),0);
-        const rMax = effDays * state.workdayHours;
-        const pct = rMax ? Math.min(100, Math.round(rHours / rMax * 100)) : 0;
-        avgAcc += pct;
-        const col = pct >= 95 ? 'var(--danger)' : pct >= 80 ? 'var(--warn)' : `var(--r${(i%8)+1})`;
-        return `<div class="dash-rbar">
-          <div class="dash-rbar-name" title="${r}">${r}</div>
-          <div class="dash-rbar-track"><div class="dash-rbar-fill" style="width:${pct}%; background:${col};">${rHours}ч</div></div>
-          <div class="dash-rbar-pct" style="color:${col};">${pct}%</div>
-        </div>`;
-      }).join('');
-      const badge = document.getElementById('bi-react-badge');
-      if (badge) badge.textContent = 'средн. ' + Math.round(avgAcc / state.reactors.length) + '%';
-    }
-  }
+  // Уровень 2 «Реакторы» — live-карточки Р-1…Р-N (по выбранной дате)
+  renderReactorCards();
 
   // ── Линии розлива за период: доля выпуска, партии, штуки ──
   const linesListEl = document.getElementById('bi-pouring-lines-list');
