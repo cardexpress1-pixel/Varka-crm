@@ -1436,6 +1436,14 @@
 #page-dashboard .dash-week-sum{display:flex;gap:22px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap;}
 #page-dashboard .dash-ws{font-size:12px;color:var(--text2);}
 #page-dashboard .dash-ws b{display:block;font-size:17px;font-weight:800;color:var(--text);margin-top:2px;}
+/* месячный тренд выпуска (горизонт «Месяц») */
+#page-dashboard .dash-mt{display:flex;align-items:stretch;gap:3px;height:140px;overflow-x:auto;padding-bottom:2px;}
+#page-dashboard .dash-mt-day{flex:1 0 13px;min-width:13px;display:flex;flex-direction:column;align-items:center;}
+#page-dashboard .dash-mt-track{flex:1;width:100%;display:flex;align-items:flex-end;}
+#page-dashboard .dash-mt-bar{width:100%;border-radius:4px 4px 2px 2px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#000));transition:height .4s cubic-bezier(.22,1,.36,1);}
+#page-dashboard .dash-mt-bar.is-best{background:linear-gradient(180deg,var(--accent2),color-mix(in srgb,var(--accent2) 72%,#000));}
+#page-dashboard .dash-mt-bar.is-today{outline:2px solid var(--accent);outline-offset:1px;}
+#page-dashboard .dash-mt-num{font-size:9px;color:var(--text3);font-weight:600;margin-top:5px;height:11px;line-height:11px;}
 /* reactor load bars */
 #page-dashboard .dash-rbar{display:grid;grid-template-columns:minmax(64px,auto) 1fr 44px;align-items:center;gap:11px;margin-bottom:12px;}
 #page-dashboard .dash-rbar:last-child{margin-bottom:0;}
@@ -1517,14 +1525,24 @@ body.theme-light #page-dashboard .rc2{box-shadow:0 1px 3px rgba(20,30,60,.06), 0
   </div>
   <div class="dash-reactors" id="dash-reactor-cards"></div>
 
-  <!-- Выпуск по дням — недельные плитки -->
-  <div class="dash-card">
+  <!-- Выпуск по дням — недельные плитки (горизонты «День»/«Неделя») -->
+  <div class="dash-card" id="bi-week-card">
     <div class="dash-card-h">
       <div class="dash-card-t">Выпуск по дням</div>
       <span class="dash-badge">текущая неделя</span>
     </div>
     <div class="dash-days" id="bi-week-tiles"></div>
     <div class="dash-week-sum" id="bi-week-sum"></div>
+  </div>
+
+  <!-- Тренд выпуска за месяц (горизонт «Месяц») -->
+  <div class="dash-card" id="bi-month-card" style="display:none;">
+    <div class="dash-card-h">
+      <div class="dash-card-t">Тренд выпуска за месяц</div>
+      <span class="dash-badge" id="bi-month-badge">—</span>
+    </div>
+    <div class="dash-mt" id="bi-month-trend"></div>
+    <div class="dash-week-sum" id="bi-month-sum"></div>
   </div>
 
   <!-- Линии розлива -->
@@ -3867,6 +3885,64 @@ function renderDashWeekTiles() {
   }
 }
 
+// Тренд выпуска за месяц (горизонт «Месяц»): бар по каждому дню месяца, лучший день,
+// сводка. Основа бара — факт (шт), в тултипе — кг. Прячет себя вне горизонта «Месяц».
+function renderMonthTrend(range) {
+  const el = document.getElementById('bi-month-trend');
+  const card = document.getElementById('bi-month-card');
+  if (!el || !card) return;
+  if (!range || range.horizon !== 'month') { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const start = new Date(range.start);
+  const y = start.getFullYear(), m = start.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const todayISO = fmtDate(new Date());
+
+  const arr = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = fmtDate(new Date(y, m, d));
+    const db = state.batches.filter(b => b.brewDate === iso && b.status !== 'deleted' && b.status !== 'cancelled');
+    const plan = db.reduce((s, b) => s + (b.planQty || 0), 0);
+    const done = db.filter(b => b.status === 'done');
+    const fact = done.reduce((s, b) => s + (b.factQty || 0), 0);
+    const kg = done.reduce((s, b) => s + (b.factQty || 0) * taraOf(b), 0);
+    arr.push({ d, iso, plan, fact, kg });
+  }
+  const maxFact = Math.max(1, ...arr.map(x => x.fact));
+  let bestIdx = 0; arr.forEach((x, i) => { if (x.fact > arr[bestIdx].fact) bestIdx = i; });
+  const hasData = arr.some(x => x.fact > 0);
+
+  el.innerHTML = arr.map((x, i) => {
+    const h = x.fact ? Math.max(6, Math.round(x.fact / maxFact * 100)) : 0;
+    const cls = (hasData && i === bestIdx && x.fact) ? ' is-best' : (x.iso === todayISO ? ' is-today' : '');
+    const showNum = x.d === 1 || x.d % 5 === 0 || (hasData && i === bestIdx) || x.iso === todayISO;
+    const title = `${x.d} ${DASH_MON_GEN[m]}: ${nf(x.fact)} шт${x.kg ? ` · ${nf(x.kg)} кг` : ''}${x.plan ? ` · план ${nf(x.plan)}` : ''}`;
+    return `<div class="dash-mt-day" title="${title}">
+      <div class="dash-mt-track"><div class="dash-mt-bar${cls}" style="height:${h}%"></div></div>
+      <div class="dash-mt-num">${showNum ? x.d : ''}</div>
+    </div>`;
+  }).join('');
+
+  const totFact = arr.reduce((s, x) => s + x.fact, 0);
+  const totPlan = arr.reduce((s, x) => s + x.plan, 0);
+  const totKg = arr.reduce((s, x) => s + x.kg, 0);
+  const activeDays = arr.filter(x => x.fact > 0).length;
+  const donePct = totPlan ? Math.round(totFact / totPlan * 100) : 0;
+  const dcol = !totPlan ? 'var(--text3)' : Math.abs(donePct - 100) <= 6 ? 'var(--accent2)' : donePct >= 70 ? 'var(--warn)' : 'var(--danger)';
+  const sumEl = document.getElementById('bi-month-sum');
+  if (sumEl) sumEl.innerHTML = `
+    <div class="dash-ws">Выпущено за месяц<b>${nf(totKg)} кг · ${nf(totFact)} шт</b></div>
+    <div class="dash-ws">Выполнение плана<b style="color:${dcol}">${totPlan ? donePct + '%' : '—'}</b></div>
+    <div class="dash-ws">Лучший день<b>${hasData ? arr[bestIdx].d + ' ' + DASH_MON_GEN[m] + ', ' + nf(arr[bestIdx].fact) + ' шт' : '—'}</b></div>
+    <div class="dash-ws">Рабочих дней<b>${activeDays} из ${daysInMonth}</b></div>`;
+  const badge = document.getElementById('bi-month-badge');
+  if (badge) badge.textContent = DASH_MON_NOM[m] + ' ' + y;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // ПАНЕЛЬ АЛАРМОВ — сводка тревожных сигналов по всему производству
 // ════════════════════════════════════════════════════════════════════════════
@@ -4492,8 +4568,12 @@ function renderBiAnalytics() {
 
   // Уровень 1 «Пульс дня» — по окну горизонта
   renderPulseDay(range);
-  // Недельные плитки «Выпуск по дням» — собственная недельная навигация, от горизонта не зависят
-  renderDashWeekTiles();
+  // Тренд-блоки по горизонту: День/Неделя → недельные плитки; Месяц → месячный тренд
+  const isMonth = range.horizon === 'month';
+  const weekCard = document.getElementById('bi-week-card');
+  if (weekCard) weekCard.style.display = isMonth ? 'none' : '';
+  if (!isMonth) renderDashWeekTiles();
+  renderMonthTrend(range);
 
   const periodBatches = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted');
   const doneBatches = periodBatches.filter(b => b.status === 'done');
