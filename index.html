@@ -1398,7 +1398,7 @@
 #page-dashboard .dash-kpi-val{font-size:26px;font-weight:800;line-height:1;letter-spacing:-.02em;color:var(--text);}
 #page-dashboard .dash-kpi-foot{font-size:11.5px;color:var(--text3);margin-top:8px;}
 /* Пульс дня (Уровень 1) */
-#page-dashboard .dash-pulse{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;}
+#page-dashboard .dash-pulse{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;}
 #page-dashboard .dash-pulse-cell{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 15px;min-width:0;}
 #page-dashboard .dp-lbl{font-size:11px;color:var(--text2);font-weight:600;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #page-dashboard .dp-val{font-size:22px;font-weight:800;line-height:1.05;letter-spacing:-.02em;color:var(--text);}
@@ -4507,8 +4507,11 @@ function renderProducts(doneBatches) {
   </table>`;
 }
 
-// Уровень 1 «Пульс дня» — 6 показателей по окну горизонта (День/Неделя/Месяц).
-// Основа — ОБЪЁМ (кг, от тары не зависит), штуки показываем рядом.
+// Уровень 1 «Пульс дня» — 5 фактических показателей по окну горизонта (День/Неделя/Месяц).
+// Логика сварено/выпущено: варка проходит стадии … brewed → pouring → poured → finished.
+//   Сварено   = объём варок, у которых варка ЗАВЕРШЕНА (стадия brewed и дальше) — продукт физически сварен.
+//   Выпущено  = штуки/объём варок, где розлив закрыт (есть factQty).
+//   Ожидает розлива = сварено, но ещё не выпущено (brewed/pouring/poured) — объясняет разницу первых двух.
 // Объём варки = b.volume; если не заполнен (историч. данные) — оцениваем planQty×тара из рецепта.
 function renderPulseDay(range) {
   const el = document.getElementById('bi-pulse');
@@ -4520,41 +4523,39 @@ function renderPulseDay(range) {
   const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
   const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
   const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const tf = kg => ((kg || 0) / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 
   const periodBatches = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
-  const doneB   = periodBatches.filter(b => b.status === 'done');
-  const planKg  = periodBatches.reduce((s,b) => s + volOf(b), 0);
-  const planQty = periodBatches.reduce((s,b) => s + (b.planQty || 0), 0);
-  const factQty = doneB.reduce((s,b) => s + (b.factQty || 0), 0);
-  const factKg  = doneB.reduce((s,b) => s + (b.factQty || 0) * taraOf(b), 0);
-  const pct = planKg ? Math.round(factKg / planKg * 100) : null;
-  const doneCount = doneB.length, totalCount = periodBatches.length;
+  const totalCount = periodBatches.length;
+
+  // Сварено — варка завершена (стадия brewed и позже); Ожидает розлива — сварено, но розлив ещё не закрыт.
+  const brewedStages   = new Set(['brewed', 'pouring', 'poured', 'finished']);
+  const awaitingStages = new Set(['brewed', 'pouring', 'poured']);
+  const brewedB   = periodBatches.filter(b => brewedStages.has(getBatchStage(b)));
+  const awaitingB = periodBatches.filter(b => awaitingStages.has(getBatchStage(b)));
+  const releasedB = periodBatches.filter(b => b.factQty != null); // розлив закрыт → выпущено
+
+  const brewedKg   = brewedB.reduce((s,b) => s + volOf(b), 0);
+  const awaitingKg = awaitingB.reduce((s,b) => s + volOf(b), 0);
+  const releasedQty = releasedB.reduce((s,b) => s + (b.factQty || 0), 0);
+  const releasedKg  = releasedB.reduce((s,b) => s + (b.factQty || 0) * taraOf(b), 0);
+
   // День-сегодня — live (варят/разливают сейчас); иначе — сколько реакторов задействовано за окно
   const liveReactors = isToday
     ? new Set(periodBatches.filter(b => { const st = getBatchStage(b); return st === 'brewing' || st === 'pouring'; }).map(b => b.reactor)).size
     : new Set(periodBatches.map(b => b.reactor).filter(Boolean)).size;
 
-  let stTxt, stCol;
-  if (totalCount === 0 || pct === null) { stTxt = 'Нет данных'; stCol = 'var(--text2)'; }
-  else if (pct >= 90) { stTxt = 'В норме'; stCol = 'var(--accent2)'; }
-  else if (pct >= 70) { stTxt = 'Риск';    stCol = 'var(--warn)'; }
-  else { stTxt = 'Срыв'; stCol = 'var(--danger)'; }
-  const pctCol = pct === null ? 'var(--text3)' : pct >= 90 ? 'var(--accent2)' : pct >= 70 ? 'var(--warn)' : 'var(--danger)';
-  const progPct = totalCount ? Math.round(doneCount / totalCount * 100) : 0;
-  const kgU = '<span style="font-size:13px;color:var(--text3);font-weight:600"> кг</span>';
-
-  const planLbl   = isDay ? (isToday ? 'План на сегодня' : 'План на день') : 'План за период';
-  const statusLbl = isDay ? 'Статус дня' : 'Статус периода';
-  const reactLbl  = 'Реакторов'; // короткий ярлык — не обрезается; уточнение в подписи
-  const reactSub  = isToday ? 'варят / разливают' : 'задействовано';
+  const tU   = '<span style="font-size:13px;color:var(--text3);font-weight:600"> т</span>';
+  const pcsU = '<span style="font-size:14px;color:var(--text3);font-weight:600"> шт</span>';
+  const reactSub = isToday ? 'варят / разливают' : 'задействовано';
+  const pluVar = n => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? 'варок' : (b === 1 ? 'варка' : (b >= 2 && b <= 4 ? 'варки' : 'варок')); };
 
   el.innerHTML = `
-    <div class="dash-pulse-cell"><div class="dp-lbl">${planLbl}</div><div class="dp-val">${nf(planKg)}${kgU}</div><div class="dp-sub">${nf(planQty)} шт</div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">Факт выпуска</div><div class="dp-val">${nf(factKg)}${kgU}</div><div class="dp-sub">${nf(factQty)} шт</div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">Выполнение плана</div><div class="dp-val" style="color:${pctCol}">${pct === null ? '—' : pct + '%'}</div><div class="dp-sub">факт / план по объёму</div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">Варок завершено</div><div class="dp-val">${doneCount}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${totalCount}</span></div><div class="dp-prog"><i style="width:${progPct}%"></i></div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">${reactLbl}</div><div class="dp-val">${liveReactors}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${state.reactors.length}</span></div><div class="dp-sub">${reactSub}</div></div>
-    <div class="dash-pulse-cell dp-status" style="background:color-mix(in srgb, ${stCol} 12%, var(--surface)); border-color:color-mix(in srgb, ${stCol} 32%, var(--border))"><div class="dp-lbl">${statusLbl}</div><div class="dp-val" style="color:${stCol}; font-size:19px">${stTxt}</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Сварено</div><div class="dp-val">${tf(brewedKg)}${tU}</div><div class="dp-sub">${nf(brewedKg)} кг</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Выпущено</div><div class="dp-val">${nf(releasedQty)}${pcsU}</div><div class="dp-sub">${nf(releasedKg)} кг</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Варок</div><div class="dp-val">${totalCount}</div><div class="dp-sub">${releasedB.length} с закрытым розливом</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Реакторов</div><div class="dp-val">${liveReactors}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${state.reactors.length}</span></div><div class="dp-sub">${reactSub}</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Ожидает розлива</div><div class="dp-val">${tf(awaitingKg)}${tU}</div><div class="dp-sub">${awaitingB.length} ${pluVar(awaitingB.length)}</div></div>
   `;
 }
 
