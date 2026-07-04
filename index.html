@@ -4546,8 +4546,8 @@ function renderPulseDay(range) {
 
   const planLbl   = isDay ? (isToday ? 'План на сегодня' : 'План на день') : 'План за период';
   const statusLbl = isDay ? 'Статус дня' : 'Статус периода';
-  const reactLbl  = isToday ? 'Реакторов в работе' : 'Реакторов задействовано';
-  const reactSub  = isToday ? 'варят / разливают' : (isDay ? 'за день' : 'за период');
+  const reactLbl  = 'Реакторов'; // короткий ярлык — не обрезается; уточнение в подписи
+  const reactSub  = isToday ? 'варят / разливают' : 'задействовано';
 
   el.innerHTML = `
     <div class="dash-pulse-cell"><div class="dp-lbl">${planLbl}</div><div class="dp-val">${nf(planKg)}${kgU}</div><div class="dp-sub">${nf(planQty)} шт</div></div>
