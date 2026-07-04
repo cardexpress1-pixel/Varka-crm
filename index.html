@@ -1421,9 +1421,6 @@
 #page-dashboard .rc2-v{font-weight:700;}
 #page-dashboard .rc2-metrics{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--text2);border-top:1px solid var(--border);padding-top:9px;}
 #page-dashboard .rc2-metrics b{color:var(--text);font-weight:700;}
-/* 2-колоночная аналитика */
-#page-dashboard .dash-2col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-@media(max-width:760px){#page-dashboard .dash-2col{grid-template-columns:1fr;}}
 /* week day tiles */
 #page-dashboard .dash-week-nav{display:flex;align-items:center;gap:8px;}
 #page-dashboard .dash-wk-label{font-size:12.5px;color:var(--text2);font-weight:600;min-width:150px;text-align:center;}
@@ -1460,17 +1457,24 @@
 #page-dashboard .dash-pl-bar>i{display:block;height:100%;border-radius:5px;}
 #page-dashboard .dash-pl-meta{display:flex;gap:16px;font-size:11.5px;color:var(--text2);flex-wrap:wrap;}
 #page-dashboard .dash-pl-meta b{color:var(--text);font-weight:700;}
-/* выполнение плана */
-#page-dashboard .dash-pb{padding:13px 0;border-bottom:1px solid var(--border);}
-#page-dashboard .dash-pb:last-child{border-bottom:0;padding-bottom:0;}
-#page-dashboard .dash-pb:first-child{padding-top:2px;}
-#page-dashboard .dash-pb-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px;}
-#page-dashboard .dash-pb-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#page-dashboard .dash-pb-val{font-size:13.5px;font-weight:800;flex-shrink:0;}
-#page-dashboard .dash-pb-track{position:relative;height:22px;background:var(--surface2);border-radius:7px;overflow:hidden;}
-#page-dashboard .dash-pb-fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px;display:flex;align-items:center;padding-left:8px;font-size:10.5px;font-weight:700;color:#fff;box-sizing:border-box;transition:width .5s cubic-bezier(.22,1,.36,1);overflow:hidden;}
-#page-dashboard .dash-pb-mark{position:absolute;top:0;bottom:0;width:2px;background:var(--text);opacity:.4;border-radius:2px;}
-#page-dashboard .dash-pb-sub{font-size:11px;color:var(--text3);margin-top:7px;text-align:right;font-weight:500;}
+/* Продукты (Уровень 3) — таблица по SKU */
+#page-dashboard #bi-products{overflow-x:auto;}
+#page-dashboard .dash-prod-tbl{width:100%;border-collapse:collapse;font-size:13px;}
+#page-dashboard .dash-prod-tbl th{text-align:left;font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.03em;padding:0 12px 11px;border-bottom:1px solid var(--border);white-space:nowrap;}
+#page-dashboard .dash-prod-tbl th.num,#page-dashboard .dash-prod-tbl td.num{text-align:right;}
+#page-dashboard .dash-prod-tbl td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+#page-dashboard .dash-prod-name{font-size:13px;font-weight:700;color:var(--text);}
+#page-dashboard .dash-prod-sku{font-size:11px;color:var(--text3);font-weight:500;margin-top:1px;}
+#page-dashboard .dash-prod-kg{font-weight:800;color:var(--text);}
+#page-dashboard .dash-prod-pcs{font-size:11.5px;color:var(--text3);white-space:nowrap;}
+#page-dashboard .dash-prod-share{display:inline-flex;align-items:center;gap:9px;}
+#page-dashboard .dash-prod-sbar{width:56px;height:6px;border-radius:4px;background:var(--surface2);overflow:hidden;flex-shrink:0;}
+#page-dashboard .dash-prod-sbar>i{display:block;height:100%;border-radius:4px;background:var(--accent);}
+#page-dashboard .dash-prod-sval{font-weight:800;min-width:40px;text-align:right;}
+#page-dashboard .dash-prod-reactors{display:flex;flex-wrap:wrap;gap:5px;}
+#page-dashboard .dash-prod-rtag{font-size:11px;font-weight:800;color:#fff;padding:2px 8px;border-radius:7px;white-space:nowrap;}
+#page-dashboard .dash-prod-tbl tfoot td{padding-top:13px;border-top:2px solid var(--border);border-bottom:0;font-weight:800;color:var(--text);}
+@media(max-width:640px){#page-dashboard .dash-prod-sbar{display:none;}#page-dashboard .dash-prod-tbl th,#page-dashboard .dash-prod-tbl td{padding-left:8px;padding-right:8px;}}
 #page-dashboard .dash-empty{padding:22px;text-align:center;font-size:13px;color:var(--text3);}
 body.theme-light #page-dashboard .dash-card,
 body.theme-light #page-dashboard .dash-kpi,
@@ -1523,17 +1527,17 @@ body.theme-light #page-dashboard .rc2{box-shadow:0 1px 3px rgba(20,30,60,.06), 0
     <div class="dash-week-sum" id="bi-week-sum"></div>
   </div>
 
-  <!-- Аналитика: линии розлива + выполнение плана -->
-  <div class="dash-2col">
-    <div class="dash-card" style="margin-bottom:0;">
-      <div class="dash-card-h"><div class="dash-card-t">Линии розлива</div><span class="dash-badge">доля выпуска</span></div>
-      <div class="dash-stack" id="bi-lines-stack"></div>
-      <div id="bi-pouring-lines-list"></div>
-    </div>
-    <div class="dash-card" style="margin-bottom:0;">
-      <div class="dash-card-h"><div class="dash-card-t">Выполнение плана</div><span class="dash-badge">метка = план</span></div>
-      <div id="bi-deviation-list"></div>
-    </div>
+  <!-- Линии розлива -->
+  <div class="dash-card">
+    <div class="dash-card-h"><div class="dash-card-t">Линии розлива</div><span class="dash-badge">доля выпуска</span></div>
+    <div class="dash-stack" id="bi-lines-stack"></div>
+    <div id="bi-pouring-lines-list"></div>
+  </div>
+
+  <!-- Уровень 3 — Продукты -->
+  <div class="dash-card" id="bi-products-card" style="margin-bottom:0;">
+    <div class="dash-card-h"><div class="dash-card-t">Продукты</div><span class="dash-badge">за период · по SKU</span></div>
+    <div id="bi-products"></div>
   </div>
 
 </div>
@@ -4324,6 +4328,64 @@ function renderReactorCards() {
   if (badge) badge.textContent = workingCount + ' из ' + state.reactors.length + ' в работе';
 }
 
+// Уровень 3 «Продукты» — таблица по SKU за период: варок, выпуск (кг/шт), % от итога, реакторы.
+// Доля считается по ОБЪЁМУ (кг) — тара-нейтрально, как план/факт в Уровнях 1–2; штуки показываем рядом.
+function renderProducts(doneBatches) {
+  const el = document.getElementById('bi-products');
+  if (!el) return;
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+
+  const bySku = {};
+  doneBatches.forEach(b => {
+    const key = b.sku || b.name || '—';
+    if (!bySku[key]) bySku[key] = { sku: b.sku || '', name: b.name || b.sku || '—', count: 0, qty: 0, kg: 0, reactors: new Set() };
+    const g = bySku[key];
+    g.count++;
+    g.qty += b.factQty || 0;
+    g.kg  += (b.factQty || 0) * taraOf(b);
+    if (b.reactor) g.reactors.add(b.reactor);
+  });
+  const rows = Object.values(bySku).sort((a, b) => b.kg - a.kg);
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="dash-empty">Нет завершённых варок за период</div>`;
+    return;
+  }
+
+  const totKg = rows.reduce((s, r) => s + r.kg, 0);
+  const totQty = rows.reduce((s, r) => s + r.qty, 0);
+  const totCount = rows.reduce((s, r) => s + r.count, 0);
+  const rIdx = r => { const i = state.reactors.indexOf(r); return i === -1 ? 999 : i; };
+
+  const body = rows.map(r => {
+    const share = totKg ? (r.kg / totKg * 100) : 0;
+    const shareStr = share >= 9.95 ? Math.round(share) : share.toFixed(1);
+    const tags = [...r.reactors].sort((a, b) => rIdx(a) - rIdx(b))
+      .map(rn => `<span class="dash-prod-rtag" style="background:var(--r${reactorColor(rn)})">${rn}</span>`).join('');
+    return `<tr>
+      <td><div class="dash-prod-name">${r.name}</div>${r.sku ? `<div class="dash-prod-sku">${r.sku}</div>` : ''}</td>
+      <td class="num">${r.count}</td>
+      <td class="num"><span class="dash-prod-kg">${nf(r.kg)}</span> <span class="dash-prod-pcs">кг · ${nf(r.qty)} шт</span></td>
+      <td class="num"><span class="dash-prod-share"><span class="dash-prod-sbar"><i style="width:${Math.min(100, share)}%"></i></span><span class="dash-prod-sval">${shareStr}%</span></span></td>
+      <td><div class="dash-prod-reactors">${tags || '<span class="dash-prod-sku">—</span>'}</div></td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<table class="dash-prod-tbl">
+    <thead><tr><th>Продукт</th><th class="num">Варок</th><th class="num">Выпущено</th><th class="num">% от итога</th><th>Реакторы</th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr>
+      <td>ИТОГО</td>
+      <td class="num">${totCount}</td>
+      <td class="num"><span class="dash-prod-kg">${nf(totKg)}</span> <span class="dash-prod-pcs">кг · ${nf(totQty)} шт</span></td>
+      <td class="num">100%</td>
+      <td>—</td>
+    </tr></tfoot>
+  </table>`;
+}
+
 // Уровень 1 «Пульс дня» — 6 показателей по выбранной дате.
 // Основа — ОБЪЁМ (кг, от тары не зависит), штуки показываем рядом.
 // Объём варки = b.volume; если не заполнен (историч. данные) — оцениваем planQty×тара из рецепта.
@@ -4411,34 +4473,8 @@ function renderBiAnalytics() {
     }
   }
 
-  // ── Выполнение плана по продуктам (шкала: метка = 100% плана) ──
-  const bySku = {};
-  doneBatches.forEach(b => {
-    if (!bySku[b.sku]) bySku[b.sku] = { name: b.name, plan: 0, fact: 0, count: 0 };
-    bySku[b.sku].plan += b.planQty || 0;
-    bySku[b.sku].fact += b.factQty || 0;
-    bySku[b.sku].count++;
-  });
-  const devList = document.getElementById('bi-deviation-list');
-  const skuRows = Object.values(bySku).sort((a,b) => b.count - a.count);
-  if (devList) {
-    if (!skuRows.length) {
-      devList.innerHTML = `<div class="dash-empty">Нет завершённых партий за период</div>`;
-    } else {
-      const SCALE = 150, markLeft = 100 / SCALE * 100;
-      devList.innerHTML = skuRows.map(s => {
-        const dev = s.plan ? ((s.fact - s.plan) / s.plan * 100) : 0;
-        const done = 100 + dev;
-        const col = Math.abs(dev) <= 3 ? 'var(--accent2)' : Math.abs(dev) <= 6 ? 'var(--warn)' : 'var(--danger)';
-        const w = Math.min(100, Math.max(0, done / SCALE * 100));
-        return `<div class="dash-pb">
-          <div class="dash-pb-top"><div class="dash-pb-name" title="${s.name}">${s.name}</div><div class="dash-pb-val" style="color:${col};">${Math.round(done)}%</div></div>
-          <div class="dash-pb-track"><div class="dash-pb-fill" style="width:${w}%; background:${col};">${nf(s.fact)}</div><div class="dash-pb-mark" style="left:${markLeft}%;"></div></div>
-          <div class="dash-pb-sub">план ${nf(s.plan)} шт · ${s.count} ${pluralRu(s.count,'партия','партии','партий')}</div>
-        </div>`;
-      }).join('');
-    }
-  }
+  // ── Уровень 3 «Продукты» — таблица по SKU за период ──
+  renderProducts(doneBatches);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

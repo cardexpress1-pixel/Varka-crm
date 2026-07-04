@@ -1,0 +1,55 @@
+# Пересборка дашборда ВарКа по ТЗ — статус и передача (2026-07-04)
+
+> Читать в начале новой сессии. ТЗ: `C:/Users/Lenovo/OneDrive/Desktop/ТЗ_Дашборд_ВарКа_CRM.md`
+
+## Где работаем / как деплоим
+- **Источник истины — ЭТОТ репозиторий:** `C:/Users/Lenovo/OneDrive/Desktop/CRM/проект VarKa`
+  (remote `origin` = github.com/cardexpress1-pixel/Varka-crm, ветка `main`, хостинг **GitHub Pages** → cardexpress1-pixel.github.io/Varka-crm/).
+- `Desktop/VarKa` — устаревшая пустая копия, НЕ трогать.
+- Деплой: правка `index.html` → commit → **`git push origin main` ТОЛЬКО с явного «go» пользователя**, перед пушем показать git status/diff.
+- Правила проекта — в `CLAUDE.md`, безопасность — в `SECURITY.md`.
+
+## ⚠️ КРИТИЧНО: не тестировать на живой БД
+Приложение подключено к БОЕВОМУ Firestore (`varka/state`, один документ). Любое действие,
+дергающее `saveState()` (в т.ч. `toggleTheme()`, навигация), пишет в боевую базу.
+**Тестировать только на изолированной копии:**
+1. `cp index.html /tmp/iso/index.html`
+2. заменить в копии `projectId: "varka-test"` → `projectId: "PASTE_YOUR_PROJECT_ID"` (это отключает Firebase — `initFirebase` увидит плейсхолдер и не подключится).
+3. поднять статический сервер (node http), открыть в браузере, засеять `state` вручную, `enterApp(); showPage('dashboard')`.
+4. Проверка синтаксиса: извлечь `<script>` без src и прогнать через `new vm.Script(...)`.
+
+## Прогресс по уровням ТЗ
+- ✅ **Уровень 1 «Пульс дня»** — задеплоен, на боевом. Функция `renderPulseDay()`, контейнер `#bi-pulse`.
+  6 показателей: план кг(+шт) · факт кг(+шт) · % выполнения (по объёму) · варок готово/всего · реакторов в работе (live) · статус дня (🟢≥90/🟡70-89/🔴<70/⚫нет данных).
+- ✅ **Уровень 2 «Реакторы»** — код готов, **закоммичен и запушен (HEAD `5f8739a`)**, НО на момент паузы GitHub Pages завис (build застрял) → на боевом ещё не появился. Проверить: `curl .../index.html | grep dash-reactor-cards`. Если пусто — Pages ещё догоняет; при необходимости проверить `gh api repos/cardexpress1-pixel/Varka-crm/pages/builds/latest`.
+  Функция `renderReactorCards()`, контейнер `#dash-reactor-cards`. Карточки Р-1…Р-N: статус (Варит/Розлив/Ожидание/Простой), продукт, время факт/норматив, варок за день, выпуск кг/шт, загрузка.
+- ✅ **Уровень 3 «Продукты»** — код готов, проверен на изолированном Node-харнессе (11/11 + пустой кейс), **НЕ запушен** (ждём «go», деплой вместе с Уровнем 2).
+  Функция `renderProducts(doneBatches)`, контейнер `#bi-products` (карточка `#bi-products-card`). Таблица по SKU за период: Продукт(SKU) · Варок · Выпущено (кг/шт) · % от итога · Реакторы + строка ИТОГО. Доля — по объёму (кг), сортировка по кг DESC. **Заменил** блок «Выполнение плана» (`#bi-deviation-list` удалён; `.dash-pb*` и `.dash-2col` CSS удалены как мёртвые; «Линии розлива» теперь на всю ширину).
+- ⏳ **Уровень 4 «Горизонты День/Неделя/Месяц»** — НЕ начат. Единый переключатель на все блоки (сейчас вверху фильтр 7/30/90 — заменить на День/Неделя/Месяц). Пульс и реакторы сейчас работают по выбранной ДАТЕ (`state.dashDate`).
+- ⏳ Уровень 5 (цветовые статусы) — по сути уже сделано (светофор). Уровень 6 (тренды неделя/месяц) — потом.
+
+## Ключевые решения (согласованы с пользователем)
+- **Единица плана/факта = ОБЪЁМ (кг), штуки рядом.** Штуки зависят от тары → «выход в штуках» из рецепта не выводится. Объём варки = `b.volume`; если нет (историч. данные) — оценка `planQty × тара` из рецепта (`recipe.tara`). Факт кг = `factQty × тара`.
+- **Дневной план** = сумма объёма назначенных на день варок (не cancelled/deleted). Отдельный ввод плана НЕ делаем.
+- **Операторы отмечают старт/конец варки живьём** → live-статусы точны.
+- **Горизонты: День/Неделя/Месяц.**
+- **Светофор (🟢🟡🔴) — только для статус-индикаторов.** Цвета-идентификаторы (бейджи реакторов `--r1..8`, линии) оставлены как «различалки» — НЕ трогать.
+
+## Модель данных (кратко)
+- `state.batches[]`: id, sku, name, reactor, brewDate(YYYY-MM-DD), brewHours, status('planned'|'active'|'done'|'cancelled'|'deleted'), planQty, factQty, volume(кг), tara(л/шт), pouringLine, pmStage, brewStartedAt/brewEndedAt/pouringStartedAt/pouringEndedAt.
+- `getBatchStage(b)` → queued/assigned/brewing/brewed/pouring/poured/finished. ВАЖНО: у готовых варок без флага `assignedToBrewing` стадия читается как 'queued' → в статусе реактора готовые исключать (`b.status !== 'done'`).
+- `state.recipes[]`: sku, name, category, baseBatch, tara, **brewHours** (норматив варки), ingredients.
+- `state.reactors` — массив имён (Р-1…Р-7). `state.workdayHours` — смена (8ч).
+- Дневной план из недельного: `state.wpBrewPlan[getMondayOf(date)][sku][dateISO]` = qty.
+- Хелперы: fmtDate, addDays, getMondayOf, fmtDateHuman, statusLabel, reactorColor, pluralRu, formatDuration, getBatchStage.
+- Рендер дашборда: `renderBiAnalytics()` (зовёт renderPulseDay, renderReactorCards, renderDashWeekTiles + линии/выполнение плана). `renderDashboard()`. Разметка — `id="page-dashboard"`.
+
+## Открытые вопросы (не срочно)
+- У 28 восстановленных реальных варок пустое поле `reactor` (журнал не хранил) — проставить вручную или точный restore.
+- Точный restore данных — с другого офлайн-компьютера (localStorage `varka_state_v2`) до его переподключения; либо Firebase-бэкап. Локальная страховка: `Desktop/CRM/VarKa-local-backup/`.
+- Безопасность №1: Firestore открыт на запись любому — правила в `SECURITY.md` вставить в Firebase Console (доступ у пользователя). Этап 2 (именные аккаунты) пользователь отложил.
+
+## Как продолжить в новой сессии
+1. Открыть сессию в папке репозитория `Desktop/CRM/проект VarKa`.
+2. Сказать: «продолжаем пересборку дашборда, читай DASHBOARD_PROGRESS.md».
+3. Первым делом проверить, догнал ли GitHub Pages Уровень 2 (grep dash-reactor-cards на боевом). Затем — Уровень 3 «Продукты».
