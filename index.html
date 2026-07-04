@@ -1500,10 +1500,10 @@ body.theme-light #page-dashboard .rc2{box-shadow:0 1px 3px rgba(20,30,60,.06), 0
         <span style="width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block;flex-shrink:0;"></span>Сегодня
       </button>
     </div>
-    <div style="display:flex; align-items:center; gap:6px;">
-      <button class="filter-btn" onclick="setBiPeriod(7,this)">7 дней</button>
-      <button class="filter-btn" onclick="setBiPeriod(30,this)">30 дней</button>
-      <button class="filter-btn" onclick="setBiPeriod(90,this)">90 дней</button>
+    <div style="display:flex; align-items:center; gap:6px;" id="dash-horizon-switch">
+      <button class="filter-btn active" data-horizon="day" onclick="setDashHorizon('day',this)">День</button>
+      <button class="filter-btn" data-horizon="week" onclick="setDashHorizon('week',this)">Неделя</button>
+      <button class="filter-btn" data-horizon="month" onclick="setDashHorizon('month',this)">Месяц</button>
     </div>
   </div>
 
@@ -2559,7 +2559,7 @@ function applyStateMigrations() {
   // пользователь явно переключил её вручную (themeUserSet). Иначе — принудительно светлая,
   // в т.ч. для старых сохранённых состояний без этого флага.
   if (!state.themeUserSet) state.theme = 'light';
-  state.biPeriodDays = null;
+  state.dashHorizon = state.dashHorizon || 'day'; // горизонт дашборда: 'day'|'week'|'month'
   state.dashWeekOffset = 0; // недельные плитки дашборда всегда стартуют с текущей недели
   if (!state.stockLevels) state.stockLevels = {};
   if (!state.wpClients || !state.wpClients.length) state.wpClients = [...state.clients];
@@ -3747,8 +3747,38 @@ function updateDateNavUI(humanId, todayBtnId, dateStr) {
 
 function dashOpenDatePicker() { openDatePickerFor('dash-date-picker'); }
 
+// Горизонт дашборда → окно дат [start,end] (ISO) + человекочитаемая подпись.
+// Якорь — state.dashDate. День: [d,d]; Неделя: Пн–Вс; Месяц: 1-е…послед. число.
+const DASH_MON_NOM = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const DASH_MON_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const DASH_MON_SHORT = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+function dashRange() {
+  const horizon = state.dashHorizon || 'day';
+  const anchor = state.dashDate || fmtDate(new Date());
+  const d = new Date(anchor);
+  if (horizon === 'week') {
+    const start = getMondayOf(d);
+    const end = fmtDate(addDays(new Date(start), 6));
+    const a = new Date(start), b = new Date(end);
+    const label = a.getDate() + ' ' + DASH_MON_SHORT[a.getMonth()] + ' – ' + b.getDate() + ' ' + DASH_MON_SHORT[b.getMonth()] + ' ' + b.getFullYear();
+    return { start, end, horizon, label };
+  }
+  if (horizon === 'month') {
+    const y = d.getFullYear(), m = d.getMonth();
+    const start = fmtDate(new Date(y, m, 1));
+    const end = fmtDate(new Date(y, m + 1, 0));
+    return { start, end, horizon, label: DASH_MON_NOM[m] + ' ' + y };
+  }
+  return { start: anchor, end: anchor, horizon: 'day', label: d.getDate() + ' ' + DASH_MON_GEN[d.getMonth()] + ' ' + d.getFullYear() };
+}
+
 function dashShiftDay(delta) {
-  state.dashDate = fmtDate(addDays(new Date(state.dashDate), delta));
+  const h = state.dashHorizon || 'day';
+  const d = new Date(state.dashDate);
+  if (h === 'week') d.setDate(d.getDate() + delta * 7);
+  else if (h === 'month') d.setMonth(d.getMonth() + delta);
+  else d.setDate(d.getDate() + delta);
+  state.dashDate = fmtDate(d);
   saveState();
   renderDashboard();
 }
@@ -3760,8 +3790,12 @@ function dashGoToDate(iso) {
 }
 function dashGoToday() {
   state.dashDate = fmtDate(new Date());
-  state.biPeriodDays = null;
-  document.querySelectorAll('#page-dashboard .filter-btn').forEach(b => b.classList.remove('active'));
+  saveState();
+  renderDashboard();
+}
+function setDashHorizon(h, btn) {
+  state.dashHorizon = h;
+  document.querySelectorAll('#page-dashboard .filter-btn').forEach(b => b.classList.toggle('active', b === btn));
   saveState();
   renderDashboard();
 }
@@ -4193,8 +4227,10 @@ function renderDashboard() {
 
   const picker = document.getElementById('dash-date-picker');
   if (picker) picker.value = viewDate;
+  const range = dashRange();
   const humanEl = document.getElementById('dash-date-human');
-  if (humanEl) { const d = new Date(viewDate); humanEl.textContent = d.getDate() + ' ' + ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][d.getMonth()] + ' ' + d.getFullYear(); }
+  if (humanEl) humanEl.textContent = range.label;
+  document.querySelectorAll('#dash-horizon-switch .filter-btn').forEach(b => b.classList.toggle('active', b.dataset.horizon === range.horizon));
   const todayBtn = document.getElementById('dash-today-btn');
   if (todayBtn) {
     if (isToday) { todayBtn.classList.remove('btn-ghost'); todayBtn.classList.add('btn-primary'); }
@@ -4254,27 +4290,17 @@ function renderDashboard() {
 // ════════════════════════════════════════════════════════════════════════════
 // BI АНАЛИТИКА
 // ════════════════════════════════════════════════════════════════════════════
-function setBiPeriod(days, btn) {
-  const alreadyActive = btn.classList.contains('active');
-  document.querySelectorAll('#page-dashboard .filter-btn').forEach(b => b.classList.remove('active'));
-  if (alreadyActive) {
-    state.biPeriodDays = null;
-  } else {
-    state.biPeriodDays = days;
-    btn.classList.add('active');
-  }
-  saveState();
-  renderBiAnalytics();
-}
 
-// Уровень 2 «Реакторы» — карточки Р-1…Р-N: live-статус, продукт, время факт/норматив, выпуск за день.
+// Уровень 2 «Реакторы» — карточки Р-1…Р-N. День: live-статус, продукт, время факт/норматив.
+// Неделя/Месяц: агрегат за окно (варок, выпуск, загрузка, работал/простой).
 const DASH_IDLE_HOURS = 2; // порог «Простой»: если реактор без активной варки и последняя активность старше N часов
-function renderReactorCards() {
+function renderReactorCards(range) {
   const el = document.getElementById('dash-reactor-cards');
   if (!el) return;
-  const viewDate = state.dashDate || fmtDate(new Date());
-  const isToday = viewDate === fmtDate(new Date());
-  const now = isToday ? new Date() : new Date(viewDate + 'T23:59:59');
+  range = range || dashRange();
+  const isDay = range.horizon === 'day';
+  const isToday = isDay && range.start === fmtDate(new Date());
+  const now = isToday ? new Date() : new Date(range.end + 'T23:59:59');
   const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
   const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
   const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
@@ -4284,37 +4310,38 @@ function renderReactorCards() {
   let workingCount = 0;
   el.innerHTML = state.reactors.map((r, i) => {
     const rc = (i % 8) + 1;
-    const rb = state.batches.filter(b => b.reactor === r && b.brewDate === viewDate && b.status !== 'deleted' && b.status !== 'cancelled');
-    const active = rb.filter(b => b.status !== 'done');   // готовые не участвуют в текущем статусе
-    const brewing = active.find(b => getBatchStage(b) === 'brewing');
-    const pouring = active.find(b => getBatchStage(b) === 'pouring');
-    const waiting = active.find(b => ['queued', 'assigned'].includes(getBatchStage(b)));
+    const rb = state.batches.filter(b => b.reactor === r && b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
     const doneB = rb.filter(b => b.status === 'done');
     const factQty = doneB.reduce((s, b) => s + (b.factQty || 0), 0);
     const factKg = doneB.reduce((s, b) => s + (b.factQty || 0) * taraOf(b), 0);
     const loadH = rb.reduce((s, b) => s + (b.brewHours || 0), 0);
-
-    let stTxt, stCol, cur = null;
-    // Светофор: 🟢 работает (Варит/Розлив) · 🟡 Ожидание · 🔴 Простой
-    if (brewing) { stTxt = 'Варит'; stCol = 'var(--accent2)'; cur = brewing; workingCount++; }
-    else if (pouring) { stTxt = 'Розлив'; stCol = 'var(--accent2)'; cur = pouring; workingCount++; }
-    else if (waiting) { stTxt = 'Ожидание'; stCol = 'var(--warn)'; cur = waiting; }
-    else { stTxt = 'Простой'; stCol = 'var(--danger)'; cur = doneB[doneB.length - 1] || null; }
-
-    let timeRow = '';
-    if (brewing && brewing.brewStartedAt) {
-      const factMs = now - new Date(brewing.brewStartedAt);
-      const normH = (recBySku[brewing.sku] && recBySku[brewing.sku].brewHours) || brewing.brewHours || 0;
-      const over = normH && (factMs / 3600000) > normH;
-      timeRow = `<div class="rc2-row"><span class="rc2-k">Время варки</span><span class="rc2-v" style="color:${over ? 'var(--danger)' : 'var(--text)'}">${fmtHM(factMs)} / ${normH}ч</span></div>`;
-    }
-    const prod = cur ? cur.name : '—';
-    return `<div class="rc2">
-      <div class="rc2-h">
+    const cardHead = (stTxt, stCol) => `<div class="rc2-h">
         <div class="rc2-badge" style="background:var(--r${rc})">${r}</div>
         <div class="rc2-name">${r}</div>
         <span class="rc2-status" style="color:${stCol};background:color-mix(in srgb, ${stCol} 14%, transparent)">${stTxt}</span>
-      </div>
+      </div>`;
+
+    if (isDay) {
+      // ── live-режим (как в Уровне 2): статус по текущей стадии ──
+      const active = rb.filter(b => b.status !== 'done');
+      const brewing = active.find(b => getBatchStage(b) === 'brewing');
+      const pouring = active.find(b => getBatchStage(b) === 'pouring');
+      const waiting = active.find(b => ['queued', 'assigned'].includes(getBatchStage(b)));
+      let stTxt, stCol, cur = null;
+      if (brewing) { stTxt = 'Варит'; stCol = 'var(--accent2)'; cur = brewing; workingCount++; }
+      else if (pouring) { stTxt = 'Розлив'; stCol = 'var(--accent2)'; cur = pouring; workingCount++; }
+      else if (waiting) { stTxt = 'Ожидание'; stCol = 'var(--warn)'; cur = waiting; }
+      else { stTxt = 'Простой'; stCol = 'var(--danger)'; cur = doneB[doneB.length - 1] || null; }
+      let timeRow = '';
+      if (brewing && brewing.brewStartedAt) {
+        const factMs = now - new Date(brewing.brewStartedAt);
+        const normH = (recBySku[brewing.sku] && recBySku[brewing.sku].brewHours) || brewing.brewHours || 0;
+        const over = normH && (factMs / 3600000) > normH;
+        timeRow = `<div class="rc2-row"><span class="rc2-k">Время варки</span><span class="rc2-v" style="color:${over ? 'var(--danger)' : 'var(--text)'}">${fmtHM(factMs)} / ${normH}ч</span></div>`;
+      }
+      const prod = cur ? cur.name : '—';
+      return `<div class="rc2">
+      ${cardHead(stTxt, stCol)}
       <div class="rc2-prod" title="${prod}">${prod}</div>
       ${timeRow}
       <div class="rc2-metrics">
@@ -4323,9 +4350,28 @@ function renderReactorCards() {
         <div>загрузка <b>${loadH}</b>/${state.workdayHours} ч</div>
       </div>
     </div>`;
+    }
+
+    // ── агрегат за окно (Неделя/Месяц) ──
+    const worked = rb.length > 0;
+    if (worked) workingCount++;
+    const stTxt = worked ? 'Работал' : 'Простой';
+    const stCol = worked ? 'var(--accent2)' : 'var(--danger)';
+    const bySku = {}; rb.forEach(b => { const k = b.name || b.sku || '—'; bySku[k] = (bySku[k] || 0) + 1; });
+    const skus = Object.keys(bySku).sort((a, b) => bySku[b] - bySku[a]);
+    const prod = skus.length ? (skus.length > 1 ? `${skus[0]} +${skus.length - 1}` : skus[0]) : '—';
+    return `<div class="rc2">
+      ${cardHead(stTxt, stCol)}
+      <div class="rc2-prod" title="${prod}">${prod}</div>
+      <div class="rc2-metrics">
+        <div><b>${doneB.length}</b> ${pluralRu(doneB.length,'варка','варки','варок')} за период</div>
+        <div>выпуск <b>${nf(factKg)}</b> кг · ${nf(factQty)} шт</div>
+        <div>загрузка <b>${loadH}</b> ч всего</div>
+      </div>
+    </div>`;
   }).join('');
   const badge = document.getElementById('dash-reactors-badge');
-  if (badge) badge.textContent = workingCount + ' из ' + state.reactors.length + ' в работе';
+  if (badge) badge.textContent = workingCount + ' из ' + state.reactors.length + (isDay ? ' в работе' : ' задействовано');
 }
 
 // Уровень 3 «Продукты» — таблица по SKU за период: варок, выпуск (кг/шт), % от итога, реакторы.
@@ -4386,28 +4432,32 @@ function renderProducts(doneBatches) {
   </table>`;
 }
 
-// Уровень 1 «Пульс дня» — 6 показателей по выбранной дате.
+// Уровень 1 «Пульс дня» — 6 показателей по окну горизонта (День/Неделя/Месяц).
 // Основа — ОБЪЁМ (кг, от тары не зависит), штуки показываем рядом.
 // Объём варки = b.volume; если не заполнен (историч. данные) — оцениваем planQty×тара из рецепта.
-function renderPulseDay() {
+function renderPulseDay(range) {
   const el = document.getElementById('bi-pulse');
   if (!el) return;
-  const viewDate = state.dashDate || fmtDate(new Date());
-  const isToday = viewDate === fmtDate(new Date());
+  range = range || dashRange();
+  const isDay = range.horizon === 'day';
+  const isToday = isDay && range.start === fmtDate(new Date());
   const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
   const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
   const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
   const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
 
-  const dayBatches = state.batches.filter(b => b.brewDate === viewDate && b.status !== 'deleted' && b.status !== 'cancelled');
-  const doneToday  = dayBatches.filter(b => b.status === 'done');
-  const planKg  = dayBatches.reduce((s,b) => s + volOf(b), 0);
-  const planQty = dayBatches.reduce((s,b) => s + (b.planQty || 0), 0);
-  const factQty = doneToday.reduce((s,b) => s + (b.factQty || 0), 0);
-  const factKg  = doneToday.reduce((s,b) => s + (b.factQty || 0) * taraOf(b), 0);
+  const periodBatches = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
+  const doneB   = periodBatches.filter(b => b.status === 'done');
+  const planKg  = periodBatches.reduce((s,b) => s + volOf(b), 0);
+  const planQty = periodBatches.reduce((s,b) => s + (b.planQty || 0), 0);
+  const factQty = doneB.reduce((s,b) => s + (b.factQty || 0), 0);
+  const factKg  = doneB.reduce((s,b) => s + (b.factQty || 0) * taraOf(b), 0);
   const pct = planKg ? Math.round(factKg / planKg * 100) : null;
-  const doneCount = doneToday.length, totalCount = dayBatches.length;
-  const liveReactors = new Set(dayBatches.filter(b => { const st = getBatchStage(b); return st === 'brewing' || st === 'pouring'; }).map(b => b.reactor)).size;
+  const doneCount = doneB.length, totalCount = periodBatches.length;
+  // День-сегодня — live (варят/разливают сейчас); иначе — сколько реакторов задействовано за окно
+  const liveReactors = isToday
+    ? new Set(periodBatches.filter(b => { const st = getBatchStage(b); return st === 'brewing' || st === 'pouring'; }).map(b => b.reactor)).size
+    : new Set(periodBatches.map(b => b.reactor).filter(Boolean)).size;
 
   let stTxt, stCol;
   if (totalCount === 0 || pct === null) { stTxt = 'Нет данных'; stCol = 'var(--text2)'; }
@@ -4418,13 +4468,18 @@ function renderPulseDay() {
   const progPct = totalCount ? Math.round(doneCount / totalCount * 100) : 0;
   const kgU = '<span style="font-size:13px;color:var(--text3);font-weight:600"> кг</span>';
 
+  const planLbl   = isDay ? (isToday ? 'План на сегодня' : 'План на день') : 'План за период';
+  const statusLbl = isDay ? 'Статус дня' : 'Статус периода';
+  const reactLbl  = isToday ? 'Реакторов в работе' : 'Реакторов задействовано';
+  const reactSub  = isToday ? 'варят / разливают' : (isDay ? 'за день' : 'за период');
+
   el.innerHTML = `
-    <div class="dash-pulse-cell"><div class="dp-lbl">План на ${isToday ? 'сегодня' : 'день'}</div><div class="dp-val">${nf(planKg)}${kgU}</div><div class="dp-sub">${nf(planQty)} шт</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">${planLbl}</div><div class="dp-val">${nf(planKg)}${kgU}</div><div class="dp-sub">${nf(planQty)} шт</div></div>
     <div class="dash-pulse-cell"><div class="dp-lbl">Факт выпуска</div><div class="dp-val">${nf(factKg)}${kgU}</div><div class="dp-sub">${nf(factQty)} шт</div></div>
     <div class="dash-pulse-cell"><div class="dp-lbl">Выполнение плана</div><div class="dp-val" style="color:${pctCol}">${pct === null ? '—' : pct + '%'}</div><div class="dp-sub">факт / план по объёму</div></div>
     <div class="dash-pulse-cell"><div class="dp-lbl">Варок завершено</div><div class="dp-val">${doneCount}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${totalCount}</span></div><div class="dp-prog"><i style="width:${progPct}%"></i></div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">Реакторов в работе</div><div class="dp-val">${liveReactors}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${state.reactors.length}</span></div><div class="dp-sub">${isToday ? 'варят / разливают' : 'за день'}</div></div>
-    <div class="dash-pulse-cell dp-status" style="background:color-mix(in srgb, ${stCol} 12%, var(--surface)); border-color:color-mix(in srgb, ${stCol} 32%, var(--border))"><div class="dp-lbl">Статус дня</div><div class="dp-val" style="color:${stCol}; font-size:19px">${stTxt}</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">${reactLbl}</div><div class="dp-val">${liveReactors}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${state.reactors.length}</span></div><div class="dp-sub">${reactSub}</div></div>
+    <div class="dash-pulse-cell dp-status" style="background:color-mix(in srgb, ${stCol} 12%, var(--surface)); border-color:color-mix(in srgb, ${stCol} 32%, var(--border))"><div class="dp-lbl">${statusLbl}</div><div class="dp-val" style="color:${stCol}; font-size:19px">${stTxt}</div></div>
   `;
 }
 
@@ -4432,22 +4487,20 @@ function renderBiAnalytics() {
   const pulseEl = document.getElementById('bi-pulse');
   if (!pulseEl) return;
 
-  // Уровень 1 «Пульс дня» — по выбранной дате
-  renderPulseDay();
-  // Недельные плитки «Выпуск по дням» не зависят от фильтра периода
+  // Окно горизонта (День/Неделя/Месяц) — единое для всех блоков
+  const range = dashRange();
+
+  // Уровень 1 «Пульс дня» — по окну горизонта
+  renderPulseDay(range);
+  // Недельные плитки «Выпуск по дням» — собственная недельная навигация, от горизонта не зависят
   renderDashWeekTiles();
 
-  const today = state.dashDate ? new Date(state.dashDate) : new Date();
-  const periodEnd = fmtDate(today);
-  const days = state.biPeriodDays || null;
-  const effDays = days || 1;                       // без фильтра считаем как за 1 день
-  const periodStart = fmtDate(addDays(today, -effDays + 1));
-  const periodBatches = state.batches.filter(b => b.brewDate >= periodStart && b.brewDate <= periodEnd && b.status !== 'deleted');
+  const periodBatches = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted');
   const doneBatches = periodBatches.filter(b => b.status === 'done');
   const nf = n => (n||0).toLocaleString('ru-RU');
 
-  // Уровень 2 «Реакторы» — live-карточки Р-1…Р-N (по выбранной дате)
-  renderReactorCards();
+  // Уровень 2 «Реакторы» — карточки Р-1…Р-N по окну горизонта
+  renderReactorCards(range);
 
   // ── Линии розлива за период: доля выпуска, партии, штуки ──
   const linesListEl = document.getElementById('bi-pouring-lines-list');
