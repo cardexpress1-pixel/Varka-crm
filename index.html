@@ -1397,6 +1397,17 @@
 #page-dashboard .dash-kpi-chip{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
 #page-dashboard .dash-kpi-val{font-size:26px;font-weight:800;line-height:1;letter-spacing:-.02em;color:var(--text);}
 #page-dashboard .dash-kpi-foot{font-size:11.5px;color:var(--text3);margin-top:8px;}
+/* Пульс дня (Уровень 1) */
+#page-dashboard .dash-pulse{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;}
+#page-dashboard .dash-pulse-cell{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 15px;min-width:0;}
+#page-dashboard .dp-lbl{font-size:11px;color:var(--text2);font-weight:600;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .dp-val{font-size:22px;font-weight:800;line-height:1.05;letter-spacing:-.02em;color:var(--text);}
+#page-dashboard .dp-sub{font-size:11px;color:var(--text3);margin-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .dp-prog{height:6px;background:var(--surface2);border-radius:4px;margin-top:9px;overflow:hidden;}
+#page-dashboard .dp-prog>i{display:block;height:100%;border-radius:4px;background:var(--accent);transition:width .4s;}
+#page-dashboard .dash-pulse-cell.dp-status{display:flex;flex-direction:column;justify-content:center;}
+@media(max-width:1100px){#page-dashboard .dash-pulse{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:640px){#page-dashboard .dash-pulse{grid-template-columns:repeat(2,1fr);}}
 /* week day tiles */
 #page-dashboard .dash-week-nav{display:flex;align-items:center;gap:8px;}
 #page-dashboard .dash-wk-label{font-size:12.5px;color:var(--text2);font-weight:600;min-width:150px;text-align:center;}
@@ -1446,7 +1457,8 @@
 #page-dashboard .dash-pb-sub{font-size:11px;color:var(--text3);margin-top:7px;text-align:right;font-weight:500;}
 #page-dashboard .dash-empty{padding:22px;text-align:center;font-size:13px;color:var(--text3);}
 body.theme-light #page-dashboard .dash-card,
-body.theme-light #page-dashboard .dash-kpi{box-shadow:0 1px 3px rgba(20,30,60,.06), 0 1px 2px rgba(20,30,60,.04);}
+body.theme-light #page-dashboard .dash-kpi,
+body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,30,60,.06), 0 1px 2px rgba(20,30,60,.04);}
 @media(max-width:560px){#page-dashboard .dash-days{gap:6px;}#page-dashboard .dash-day-tile{height:90px;}#page-dashboard .dash-day-val{font-size:12px;}}
 </style>
 <div class="page page-wide" id="page-dashboard">
@@ -1474,7 +1486,8 @@ body.theme-light #page-dashboard .dash-kpi{box-shadow:0 1px 3px rgba(20,30,60,.0
     </div>
   </div>
 
-  <div class="grid-stats" id="bi-summary-grid"></div>
+  <!-- Уровень 1 — Пульс дня -->
+  <div class="dash-pulse" id="bi-pulse"></div>
 
   <!-- Выпуск по дням — недельные плитки -->
   <div class="dash-card">
@@ -4230,10 +4243,54 @@ function setBiPeriod(days, btn) {
   renderBiAnalytics();
 }
 
-function renderBiAnalytics() {
-  const summaryEl = document.getElementById('bi-summary-grid');
-  if (!summaryEl) return;
+// Уровень 1 «Пульс дня» — 6 показателей по выбранной дате.
+// Основа — ОБЪЁМ (кг, от тары не зависит), штуки показываем рядом.
+// Объём варки = b.volume; если не заполнен (историч. данные) — оцениваем planQty×тара из рецепта.
+function renderPulseDay() {
+  const el = document.getElementById('bi-pulse');
+  if (!el) return;
+  const viewDate = state.dashDate || fmtDate(new Date());
+  const isToday = viewDate === fmtDate(new Date());
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
 
+  const dayBatches = state.batches.filter(b => b.brewDate === viewDate && b.status !== 'deleted' && b.status !== 'cancelled');
+  const doneToday  = dayBatches.filter(b => b.status === 'done');
+  const planKg  = dayBatches.reduce((s,b) => s + volOf(b), 0);
+  const planQty = dayBatches.reduce((s,b) => s + (b.planQty || 0), 0);
+  const factQty = doneToday.reduce((s,b) => s + (b.factQty || 0), 0);
+  const factKg  = doneToday.reduce((s,b) => s + (b.factQty || 0) * taraOf(b), 0);
+  const pct = planKg ? Math.round(factKg / planKg * 100) : null;
+  const doneCount = doneToday.length, totalCount = dayBatches.length;
+  const liveReactors = new Set(dayBatches.filter(b => { const st = getBatchStage(b); return st === 'brewing' || st === 'pouring'; }).map(b => b.reactor)).size;
+
+  let stTxt, stCol;
+  if (totalCount === 0 || pct === null) { stTxt = 'Нет данных'; stCol = 'var(--text2)'; }
+  else if (pct >= 90) { stTxt = 'В норме'; stCol = 'var(--accent2)'; }
+  else if (pct >= 70) { stTxt = 'Риск';    stCol = 'var(--warn)'; }
+  else { stTxt = 'Срыв'; stCol = 'var(--danger)'; }
+  const pctCol = pct === null ? 'var(--text3)' : pct >= 90 ? 'var(--accent2)' : pct >= 70 ? 'var(--warn)' : 'var(--danger)';
+  const progPct = totalCount ? Math.round(doneCount / totalCount * 100) : 0;
+  const kgU = '<span style="font-size:13px;color:var(--text3);font-weight:600"> кг</span>';
+
+  el.innerHTML = `
+    <div class="dash-pulse-cell"><div class="dp-lbl">План на ${isToday ? 'сегодня' : 'день'}</div><div class="dp-val">${nf(planKg)}${kgU}</div><div class="dp-sub">${nf(planQty)} шт</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Факт выпуска</div><div class="dp-val">${nf(factKg)}${kgU}</div><div class="dp-sub">${nf(factQty)} шт</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Выполнение плана</div><div class="dp-val" style="color:${pctCol}">${pct === null ? '—' : pct + '%'}</div><div class="dp-sub">факт / план по объёму</div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Варок завершено</div><div class="dp-val">${doneCount}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${totalCount}</span></div><div class="dp-prog"><i style="width:${progPct}%"></i></div></div>
+    <div class="dash-pulse-cell"><div class="dp-lbl">Реакторов в работе</div><div class="dp-val">${liveReactors}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${state.reactors.length}</span></div><div class="dp-sub">${isToday ? 'варят / разливают' : 'за день'}</div></div>
+    <div class="dash-pulse-cell dp-status" style="background:color-mix(in srgb, ${stCol} 12%, var(--surface)); border-color:color-mix(in srgb, ${stCol} 32%, var(--border))"><div class="dp-lbl">Статус дня</div><div class="dp-val" style="color:${stCol}; font-size:19px">${stTxt}</div></div>
+  `;
+}
+
+function renderBiAnalytics() {
+  const pulseEl = document.getElementById('bi-pulse');
+  if (!pulseEl) return;
+
+  // Уровень 1 «Пульс дня» — по выбранной дате
+  renderPulseDay();
   // Недельные плитки «Выпуск по дням» не зависят от фильтра периода
   renderDashWeekTiles();
 
@@ -4242,46 +4299,9 @@ function renderBiAnalytics() {
   const days = state.biPeriodDays || null;
   const effDays = days || 1;                       // без фильтра считаем как за 1 день
   const periodStart = fmtDate(addDays(today, -effDays + 1));
-
   const periodBatches = state.batches.filter(b => b.brewDate >= periodStart && b.brewDate <= periodEnd && b.status !== 'deleted');
   const doneBatches = periodBatches.filter(b => b.status === 'done');
-
-  const totalPlan = doneBatches.reduce((s,b) => s + (b.planQty||0), 0);
-  const totalFact = doneBatches.reduce((s,b) => s + (b.factQty||0), 0);
-  const avgDevPct = totalPlan ? (((totalFact - totalPlan) / totalPlan) * 100) : 0;
-  const doneP = totalPlan ? Math.round(totalFact / totalPlan * 100) : 0;
-  const totalHours = periodBatches.filter(b=>b.status!=='cancelled').reduce((s,b)=>s+(b.brewHours||0),0);
-  const maxHours = state.reactors.length * effDays * state.workdayHours;
-  const utilizationPct = maxHours ? Math.round(totalHours / maxHours * 100) : 0;
   const nf = n => (n||0).toLocaleString('ru-RU');
-
-  // рост: сравниваем первую и вторую половину периода по факту выпуска
-  let growth = 0, hasGrowth = false;
-  if (effDays >= 2) {
-    const dailyFact = [];
-    for (let i = effDays - 1; i >= 0; i--) {
-      const d = fmtDate(addDays(today, -i));
-      dailyFact.push(state.batches.filter(b => b.brewDate === d && b.status === 'done').reduce((s,b)=>s+(b.factQty||0),0));
-    }
-    const half = Math.floor(effDays / 2);
-    const prev = dailyFact.slice(0, half).reduce((a,b)=>a+b,0);
-    const cur = dailyFact.slice(half).reduce((a,b)=>a+b,0);
-    if (prev) { growth = Math.round((cur - prev) / prev * 100); hasGrowth = true; }
-  }
-
-  // ── KPI-плашки в едином цветовом стиле (число тёмное, статус — цветной чип) ──
-  const chip = (t,c) => `<span class="dash-kpi-chip" style="color:${c};background:color-mix(in srgb, ${c} 14%, transparent)">${t}</span>`;
-  const devColor  = Math.abs(avgDevPct) <= 3 ? 'var(--accent2)' : Math.abs(avgDevPct) <= 6 ? 'var(--warn)' : 'var(--danger)';
-  const utilColor = utilizationPct < 80 ? 'var(--accent2)' : utilizationPct < 95 ? 'var(--warn)' : 'var(--danger)';
-  const grColor   = growth > 1 ? 'var(--accent2)' : growth < -1 ? 'var(--danger)' : 'var(--text2)';
-  const grTxt     = growth > 1 ? `↑ ${growth}%` : growth < -1 ? `↓ ${Math.abs(growth)}%` : `≈ ${growth}%`;
-  const periodLbl = days ? `за ${days} дн.` : 'за день';
-  summaryEl.innerHTML = `
-    <div class="dash-kpi"><div class="dash-kpi-top"><div class="dash-kpi-lbl">Варок ${periodLbl}</div>${hasGrowth ? chip(grTxt, grColor) : ''}</div><div class="dash-kpi-val">${periodBatches.length}</div><div class="dash-kpi-foot">${hasGrowth ? 'к прошлому периоду' : 'выберите период'}</div></div>
-    <div class="dash-kpi"><div class="dash-kpi-top"><div class="dash-kpi-lbl">Выпущено, шт</div>${chip(doneP + '% плана', devColor)}</div><div class="dash-kpi-val">${nf(totalFact)}</div><div class="dash-kpi-foot">план ${nf(totalPlan)} шт</div></div>
-    <div class="dash-kpi"><div class="dash-kpi-top"><div class="dash-kpi-lbl">Отклонение</div>${chip(Math.abs(avgDevPct) <= 3 ? 'в норме' : 'вне допуска', devColor)}</div><div class="dash-kpi-val">${avgDevPct>0?'+':''}${avgDevPct.toFixed(1)}%</div><div class="dash-kpi-foot">допуск ±3%</div></div>
-    <div class="dash-kpi"><div class="dash-kpi-top"><div class="dash-kpi-lbl">Загрузка реакторов</div>${chip(utilizationPct < 80 ? 'норма' : utilizationPct < 95 ? 'высокая' : 'перегруз', utilColor)}</div><div class="dash-kpi-val">${utilizationPct}%</div><div class="dash-kpi-foot">${state.reactors.length} ${pluralRu(state.reactors.length,'реактор','реактора','реакторов')}</div></div>
-  `;
 
   // ── Загрузка реакторов за период ──
   const loadList = document.getElementById('bi-reactor-load-list');
