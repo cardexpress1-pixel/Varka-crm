@@ -1385,13 +1385,13 @@
 
 <!-- ═══════════════ PAGE: DASHBOARD ═══════════════ -->
 <style id="dash-redesign-css">
-#page-dashboard .dash-card{background:var(--surface2);border-radius:16px;padding:18px;margin-bottom:14px;}
+#page-dashboard .dash-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px;}
 #page-dashboard .dash-card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:8px;flex-wrap:wrap;}
 #page-dashboard .dash-card-t{font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--text);}
-#page-dashboard .dash-badge{font-size:11px;color:var(--text2);background:var(--surface);padding:4px 10px;border-radius:20px;font-weight:600;white-space:nowrap;}
+#page-dashboard .dash-badge{font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-weight:600;white-space:nowrap;}
 /* KPI */
 #page-dashboard #bi-summary-grid{margin-bottom:16px;}
-#page-dashboard .dash-kpi{background:var(--surface2);border-radius:16px;padding:16px 17px;text-align:left;}
+#page-dashboard .dash-kpi{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 17px;text-align:left;}
 #page-dashboard .dash-kpi-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;}
 #page-dashboard .dash-kpi-lbl{font-size:11.5px;color:var(--text2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #page-dashboard .dash-kpi-chip{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
@@ -1404,7 +1404,7 @@
 #page-dashboard .dash-day{display:flex;flex-direction:column;align-items:center;gap:8px;}
 #page-dashboard .dash-day-val{font-size:14px;font-weight:800;color:var(--text);line-height:1;}
 #page-dashboard .dash-day-val span{font-size:10px;font-weight:600;color:var(--text3);margin-left:2px;}
-#page-dashboard .dash-day-tile{width:100%;height:118px;background:var(--surface);border-radius:14px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:6px;}
+#page-dashboard .dash-day-tile{width:100%;height:118px;background:var(--surface2);border:1px solid var(--border);border-radius:14px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:6px;}
 #page-dashboard .dash-day-fill{width:100%;border-radius:10px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#000));transition:height .5s cubic-bezier(.22,1,.36,1);}
 #page-dashboard .dash-day-tile.is-today{outline:2px solid var(--accent);outline-offset:2px;}
 #page-dashboard .dash-day-pct{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:11px;font-weight:800;z-index:2;}
@@ -1416,7 +1416,7 @@
 #page-dashboard .dash-rbar{display:grid;grid-template-columns:minmax(64px,auto) 1fr 44px;align-items:center;gap:11px;margin-bottom:12px;}
 #page-dashboard .dash-rbar:last-child{margin-bottom:0;}
 #page-dashboard .dash-rbar-name{font-size:12.5px;font-weight:600;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#page-dashboard .dash-rbar-track{height:22px;background:var(--surface);border-radius:8px;overflow:hidden;}
+#page-dashboard .dash-rbar-track{height:22px;background:var(--surface2);border-radius:8px;overflow:hidden;}
 #page-dashboard .dash-rbar-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:10px;font-weight:700;color:#fff;min-width:26px;box-sizing:border-box;}
 #page-dashboard .dash-rbar-pct{font-size:13px;font-weight:800;text-align:right;}
 /* pouring lines */
@@ -1429,7 +1429,7 @@
 #page-dashboard .dash-pl-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #page-dashboard .dash-pl-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
 #page-dashboard .dash-pl-share{font-size:16px;font-weight:800;flex-shrink:0;}
-#page-dashboard .dash-pl-bar{height:7px;border-radius:5px;background:var(--surface);overflow:hidden;margin-bottom:9px;}
+#page-dashboard .dash-pl-bar{height:7px;border-radius:5px;background:var(--surface2);overflow:hidden;margin-bottom:9px;}
 #page-dashboard .dash-pl-bar>i{display:block;height:100%;border-radius:5px;}
 #page-dashboard .dash-pl-meta{display:flex;gap:16px;font-size:11.5px;color:var(--text2);flex-wrap:wrap;}
 #page-dashboard .dash-pl-meta b{color:var(--text);font-weight:700;}
@@ -1440,11 +1440,13 @@
 #page-dashboard .dash-pb-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px;}
 #page-dashboard .dash-pb-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #page-dashboard .dash-pb-val{font-size:13.5px;font-weight:800;flex-shrink:0;}
-#page-dashboard .dash-pb-track{position:relative;height:22px;background:var(--surface);border-radius:7px;overflow:hidden;}
+#page-dashboard .dash-pb-track{position:relative;height:22px;background:var(--surface2);border-radius:7px;overflow:hidden;}
 #page-dashboard .dash-pb-fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px;display:flex;align-items:center;padding-left:8px;font-size:10.5px;font-weight:700;color:#fff;box-sizing:border-box;transition:width .5s cubic-bezier(.22,1,.36,1);overflow:hidden;}
 #page-dashboard .dash-pb-mark{position:absolute;top:0;bottom:0;width:2px;background:var(--text);opacity:.4;border-radius:2px;}
 #page-dashboard .dash-pb-sub{font-size:11px;color:var(--text3);margin-top:7px;text-align:right;font-weight:500;}
 #page-dashboard .dash-empty{padding:22px;text-align:center;font-size:13px;color:var(--text3);}
+body.theme-light #page-dashboard .dash-card,
+body.theme-light #page-dashboard .dash-kpi{box-shadow:0 1px 3px rgba(20,30,60,.06), 0 1px 2px rgba(20,30,60,.04);}
 @media(max-width:560px){#page-dashboard .dash-days{gap:6px;}#page-dashboard .dash-day-tile{height:90px;}#page-dashboard .dash-day-val{font-size:12px;}}
 </style>
 <div class="page page-wide" id="page-dashboard">
