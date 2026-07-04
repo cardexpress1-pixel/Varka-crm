@@ -1384,6 +1384,69 @@
 <div class="toast" id="toast"></div>
 
 <!-- ═══════════════ PAGE: DASHBOARD ═══════════════ -->
+<style id="dash-redesign-css">
+#page-dashboard .dash-card{background:var(--surface2);border-radius:16px;padding:18px;margin-bottom:14px;}
+#page-dashboard .dash-card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:8px;flex-wrap:wrap;}
+#page-dashboard .dash-card-t{font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--text);}
+#page-dashboard .dash-badge{font-size:11px;color:var(--text2);background:var(--surface);padding:4px 10px;border-radius:20px;font-weight:600;white-space:nowrap;}
+/* KPI */
+#page-dashboard #bi-summary-grid{margin-bottom:16px;}
+#page-dashboard .dash-kpi{background:var(--surface2);border-radius:16px;padding:16px 17px;text-align:left;}
+#page-dashboard .dash-kpi-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;}
+#page-dashboard .dash-kpi-lbl{font-size:11.5px;color:var(--text2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .dash-kpi-chip{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
+#page-dashboard .dash-kpi-val{font-size:26px;font-weight:800;line-height:1;letter-spacing:-.02em;color:var(--text);}
+#page-dashboard .dash-kpi-foot{font-size:11.5px;color:var(--text3);margin-top:8px;}
+/* week day tiles */
+#page-dashboard .dash-week-nav{display:flex;align-items:center;gap:8px;}
+#page-dashboard .dash-wk-label{font-size:12.5px;color:var(--text2);font-weight:600;min-width:150px;text-align:center;}
+#page-dashboard .dash-days{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;}
+#page-dashboard .dash-day{display:flex;flex-direction:column;align-items:center;gap:8px;}
+#page-dashboard .dash-day-val{font-size:14px;font-weight:800;color:var(--text);line-height:1;}
+#page-dashboard .dash-day-val span{font-size:10px;font-weight:600;color:var(--text3);margin-left:2px;}
+#page-dashboard .dash-day-tile{width:100%;height:118px;background:var(--surface);border-radius:14px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:6px;}
+#page-dashboard .dash-day-fill{width:100%;border-radius:10px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#000));transition:height .5s cubic-bezier(.22,1,.36,1);}
+#page-dashboard .dash-day-tile.is-today{outline:2px solid var(--accent);outline-offset:2px;}
+#page-dashboard .dash-day-pct{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:11px;font-weight:800;z-index:2;}
+#page-dashboard .dash-day-name{font-size:12.5px;font-weight:600;color:var(--text2);}
+#page-dashboard .dash-week-sum{display:flex;gap:22px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap;}
+#page-dashboard .dash-ws{font-size:12px;color:var(--text2);}
+#page-dashboard .dash-ws b{display:block;font-size:17px;font-weight:800;color:var(--text);margin-top:2px;}
+/* reactor load bars */
+#page-dashboard .dash-rbar{display:grid;grid-template-columns:minmax(64px,auto) 1fr 44px;align-items:center;gap:11px;margin-bottom:12px;}
+#page-dashboard .dash-rbar:last-child{margin-bottom:0;}
+#page-dashboard .dash-rbar-name{font-size:12.5px;font-weight:600;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .dash-rbar-track{height:22px;background:var(--surface);border-radius:8px;overflow:hidden;}
+#page-dashboard .dash-rbar-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:10px;font-weight:700;color:#fff;min-width:26px;box-sizing:border-box;}
+#page-dashboard .dash-rbar-pct{font-size:13px;font-weight:800;text-align:right;}
+/* pouring lines */
+#page-dashboard .dash-stack{display:flex;height:10px;border-radius:6px;overflow:hidden;margin-bottom:16px;gap:2px;}
+#page-dashboard .dash-stack>span{min-width:0;}
+#page-dashboard .dash-pl{padding:12px 0;border-bottom:1px solid var(--border);}
+#page-dashboard .dash-pl:last-child{border-bottom:0;padding-bottom:0;}
+#page-dashboard .dash-pl:first-child{padding-top:2px;}
+#page-dashboard .dash-pl-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;gap:8px;}
+#page-dashboard .dash-pl-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .dash-pl-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+#page-dashboard .dash-pl-share{font-size:16px;font-weight:800;flex-shrink:0;}
+#page-dashboard .dash-pl-bar{height:7px;border-radius:5px;background:var(--surface);overflow:hidden;margin-bottom:9px;}
+#page-dashboard .dash-pl-bar>i{display:block;height:100%;border-radius:5px;}
+#page-dashboard .dash-pl-meta{display:flex;gap:16px;font-size:11.5px;color:var(--text2);flex-wrap:wrap;}
+#page-dashboard .dash-pl-meta b{color:var(--text);font-weight:700;}
+/* выполнение плана */
+#page-dashboard .dash-pb{padding:13px 0;border-bottom:1px solid var(--border);}
+#page-dashboard .dash-pb:last-child{border-bottom:0;padding-bottom:0;}
+#page-dashboard .dash-pb:first-child{padding-top:2px;}
+#page-dashboard .dash-pb-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px;}
+#page-dashboard .dash-pb-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .dash-pb-val{font-size:13.5px;font-weight:800;flex-shrink:0;}
+#page-dashboard .dash-pb-track{position:relative;height:22px;background:var(--surface);border-radius:7px;overflow:hidden;}
+#page-dashboard .dash-pb-fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px;display:flex;align-items:center;padding-left:8px;font-size:10.5px;font-weight:700;color:#fff;box-sizing:border-box;transition:width .5s cubic-bezier(.22,1,.36,1);overflow:hidden;}
+#page-dashboard .dash-pb-mark{position:absolute;top:0;bottom:0;width:2px;background:var(--text);opacity:.4;border-radius:2px;}
+#page-dashboard .dash-pb-sub{font-size:11px;color:var(--text3);margin-top:7px;text-align:right;font-weight:500;}
+#page-dashboard .dash-empty{padding:22px;text-align:center;font-size:13px;color:var(--text3);}
+@media(max-width:560px){#page-dashboard .dash-days{gap:6px;}#page-dashboard .dash-day-tile{height:90px;}#page-dashboard .dash-day-val{font-size:12px;}}
+</style>
 <div class="page page-wide" id="page-dashboard">
 
   <div style="font-size:18px; font-weight:800; margin-bottom:14px;" id="page-title-dashboard">Дашборд</div>
@@ -1411,27 +1474,43 @@
 
   <div class="grid-stats" id="bi-summary-grid"></div>
 
-  <div class="grid-3">
-    <div class="card">
-      <div class="card-title">Отклонения план/факт по продуктам</div>
-      <div id="bi-deviation-list"></div>
+  <!-- Выпуск по дням — недельные плитки -->
+  <div class="dash-card">
+    <div class="dash-card-h">
+      <div class="dash-card-t">Выпуск по дням</div>
+      <div class="dash-week-nav">
+        <button class="cal-nav-btn" onclick="dashWeekShift(-1)">‹</button>
+        <span id="bi-week-label" class="dash-wk-label">—</span>
+        <button class="cal-nav-btn" onclick="dashWeekShift(1)">›</button>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-title">Загрузка реакторов за период</div>
-      <div id="bi-reactor-load-list"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Линии розлива за период</div>
-      <div id="bi-pouring-lines-list"></div>
-    </div>
+    <div class="dash-days" id="bi-week-tiles"></div>
+    <div class="dash-week-sum" id="bi-week-sum"></div>
   </div>
 
-  <div class="card">
-    <div class="card-title">Динамика выпуска по дням</div>
-    <div id="bi-daily-chart"></div>
+  <!-- Три аналитических блока -->
+  <div class="grid-3">
+    <div class="dash-card" style="margin-bottom:0;">
+      <div class="dash-card-h"><div class="dash-card-t">Загрузка реакторов</div><span class="dash-badge" id="bi-react-badge">—</span></div>
+      <div id="bi-reactor-load-list"></div>
+    </div>
+    <div class="dash-card" style="margin-bottom:0;">
+      <div class="dash-card-h"><div class="dash-card-t">Линии розлива</div><span class="dash-badge">доля выпуска</span></div>
+      <div class="dash-stack" id="bi-lines-stack"></div>
+      <div id="bi-pouring-lines-list"></div>
+    </div>
+    <div class="dash-card" style="margin-bottom:0;">
+      <div class="dash-card-h"><div class="dash-card-t">Выполнение плана</div><span class="dash-badge">метка = план</span></div>
+      <div id="bi-deviation-list"></div>
+    </div>
   </div>
 
   <div class="divider"></div>
+
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+    <div style="font-size:15px; font-weight:700;">Оперативно за день</div>
+    <div style="font-size:12px; color:var(--text2);" id="dash-reactor-date-label">—</div>
+  </div>
 
   <div class="grid-stats" id="stats-grid">
     <div class="stat-box"><div class="stat-num" id="s-total">0</div><div class="stat-lbl" id="s-total-lbl">Варок за день</div></div>
@@ -1440,6 +1519,7 @@
     <div class="stat-box"><div class="stat-num s-new" id="s-requests">0</div><div class="stat-lbl">Новых заявок</div></div>
   </div>
 
+  <div id="reactor-dashboard" style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px;"></div>
 
 </div>
 
@@ -2456,6 +2536,7 @@ function applyStateMigrations() {
   // в т.ч. для старых сохранённых состояний без этого флага.
   if (!state.themeUserSet) state.theme = 'light';
   state.biPeriodDays = null;
+  state.dashWeekOffset = 0; // недельные плитки дашборда всегда стартуют с текущей недели
   if (!state.stockLevels) state.stockLevels = {};
   if (!state.wpClients || !state.wpClients.length) state.wpClients = [...state.clients];
   if (!state.wpWeekStart) state.wpWeekStart = getMondayOf(new Date());
@@ -3579,6 +3660,73 @@ function dashGoToday() {
   renderDashboard();
 }
 
+// Русское склонение существительного по числу: pluralRu(2,'варка','варки','варок')
+function pluralRu(n, one, few, many) {
+  const m = Math.abs(n) % 100, d = m % 10;
+  if (m >= 11 && m <= 14) return many;
+  if (d === 1) return one;
+  if (d >= 2 && d <= 4) return few;
+  return many;
+}
+
+// Навигация по неделям блока «Выпуск по дням» (не заглядываем в будущее дальше текущей недели)
+function dashWeekShift(delta) {
+  state.dashWeekOffset = Math.min(0, (state.dashWeekOffset || 0) + delta);
+  renderDashWeekTiles();
+}
+
+// Недельные плитки Пн–Вс: высота заливки = выпуск (факт) за день, % = факт/план
+function renderDashWeekTiles() {
+  const tilesEl = document.getElementById('bi-week-tiles');
+  if (!tilesEl) return;
+  const DN = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const MS = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const MONF = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const offset = state.dashWeekOffset || 0;
+  const monISO = getMondayOf(addDays(new Date(), offset * 7));
+  const todayISO = fmtDate(new Date());
+  const week = [];
+  for (let i = 0; i < 7; i++) {
+    const iso = fmtDate(addDays(new Date(monISO), i));
+    const db = state.batches.filter(b => b.brewDate === iso && b.status !== 'deleted' && b.status !== 'cancelled');
+    const plan = db.reduce((s,b) => s + (b.planQty || 0), 0);
+    const fact = db.filter(b => b.status === 'done').reduce((s,b) => s + (b.factQty || 0), 0);
+    week.push({ iso, plan, fact });
+  }
+  const maxFact = Math.max(1, ...week.map(d => d.fact));
+  tilesEl.innerHTML = week.map((d, i) => {
+    const pct = d.plan ? Math.round(d.fact / d.plan * 100) : 0;
+    const barH = d.fact ? Math.max(16, Math.round(d.fact / maxFact * 102)) : 0;
+    const isToday = d.iso === todayISO;
+    const pctColor = barH > 26 ? '#fff' : (d.fact ? 'var(--accent)' : 'var(--text3)');
+    const dd = new Date(d.iso);
+    const title = `${dd.getDate()} ${MONF[dd.getMonth()]}: ${d.fact.toLocaleString('ru-RU')} шт${d.plan ? ` · план ${d.plan.toLocaleString('ru-RU')} (${pct}%)` : ''}`;
+    return `<div class="dash-day">
+      <div class="dash-day-val">${d.fact ? d.fact.toLocaleString('ru-RU') : '—'}${d.fact ? '<span>шт</span>' : ''}</div>
+      <div class="dash-day-tile${isToday ? ' is-today' : ''}" title="${title}">
+        <div class="dash-day-fill" style="height:${barH}px"></div>
+        <div class="dash-day-pct" style="color:${pctColor}">${pct}%</div>
+      </div>
+      <div class="dash-day-name">${DN[i]}</div>
+    </div>`;
+  }).join('');
+  const a = new Date(monISO), b = new Date(fmtDate(addDays(new Date(monISO), 6)));
+  const lbl = document.getElementById('bi-week-label');
+  if (lbl) lbl.textContent = `${a.getDate()} ${MS[a.getMonth()]} – ${b.getDate()} ${MS[b.getMonth()]}`;
+  const wf = week.reduce((s,d) => s + d.fact, 0), wp = week.reduce((s,d) => s + d.plan, 0);
+  let bestIdx = 0;
+  week.forEach((d,idx) => { if (d.fact > week[bestIdx].fact) bestIdx = idx; });
+  const sumEl = document.getElementById('bi-week-sum');
+  if (sumEl) {
+    const donePct = wp ? Math.round(wf / wp * 100) : 0;
+    const dcol = Math.abs(donePct - 100) <= 3 ? 'var(--accent2)' : 'var(--warn)';
+    sumEl.innerHTML = `
+      <div class="dash-ws">Выпущено за неделю<b>${wf.toLocaleString('ru-RU')} шт</b></div>
+      <div class="dash-ws">Выполнение плана<b style="color:${wp ? dcol : 'var(--text3)'}">${wp ? donePct + '%' : '—'}</b></div>
+      <div class="dash-ws">Лучший день<b>${week[bestIdx].fact ? DN[bestIdx] + ', ' + week[bestIdx].fact.toLocaleString('ru-RU') + ' шт' : '—'}</b></div>`;
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // ПАНЕЛЬ АЛАРМОВ — сводка тревожных сигналов по всему производству
 // ════════════════════════════════════════════════════════════════════════════
@@ -4016,10 +4164,14 @@ function renderBiAnalytics() {
   const summaryEl = document.getElementById('bi-summary-grid');
   if (!summaryEl) return;
 
+  // Недельные плитки «Выпуск по дням» не зависят от фильтра периода
+  renderDashWeekTiles();
+
   const today = state.dashDate ? new Date(state.dashDate) : new Date();
   const periodEnd = fmtDate(today);
   const days = state.biPeriodDays || null;
-  const periodStart = days ? fmtDate(addDays(today, -days + 1)) : periodEnd;
+  const effDays = days || 1;                       // без фильтра считаем как за 1 день
+  const periodStart = fmtDate(addDays(today, -effDays + 1));
 
   const periodBatches = state.batches.filter(b => b.brewDate >= periodStart && b.brewDate <= periodEnd && b.status !== 'deleted');
   const doneBatches = periodBatches.filter(b => b.status === 'done');
@@ -4027,18 +4179,89 @@ function renderBiAnalytics() {
   const totalPlan = doneBatches.reduce((s,b) => s + (b.planQty||0), 0);
   const totalFact = doneBatches.reduce((s,b) => s + (b.factQty||0), 0);
   const avgDevPct = totalPlan ? (((totalFact - totalPlan) / totalPlan) * 100) : 0;
+  const doneP = totalPlan ? Math.round(totalFact / totalPlan * 100) : 0;
   const totalHours = periodBatches.filter(b=>b.status!=='cancelled').reduce((s,b)=>s+(b.brewHours||0),0);
-  const maxHours = state.reactors.length * days * state.workdayHours;
+  const maxHours = state.reactors.length * effDays * state.workdayHours;
   const utilizationPct = maxHours ? Math.round(totalHours / maxHours * 100) : 0;
+  const nf = n => (n||0).toLocaleString('ru-RU');
 
+  // рост: сравниваем первую и вторую половину периода по факту выпуска
+  let growth = 0, hasGrowth = false;
+  if (effDays >= 2) {
+    const dailyFact = [];
+    for (let i = effDays - 1; i >= 0; i--) {
+      const d = fmtDate(addDays(today, -i));
+      dailyFact.push(state.batches.filter(b => b.brewDate === d && b.status === 'done').reduce((s,b)=>s+(b.factQty||0),0));
+    }
+    const half = Math.floor(effDays / 2);
+    const prev = dailyFact.slice(0, half).reduce((a,b)=>a+b,0);
+    const cur = dailyFact.slice(half).reduce((a,b)=>a+b,0);
+    if (prev) { growth = Math.round((cur - prev) / prev * 100); hasGrowth = true; }
+  }
+
+  // ── KPI-плашки в едином цветовом стиле (число тёмное, статус — цветной чип) ──
+  const chip = (t,c) => `<span class="dash-kpi-chip" style="color:${c};background:color-mix(in srgb, ${c} 14%, transparent)">${t}</span>`;
+  const devColor  = Math.abs(avgDevPct) <= 3 ? 'var(--accent2)' : Math.abs(avgDevPct) <= 6 ? 'var(--warn)' : 'var(--danger)';
+  const utilColor = utilizationPct < 80 ? 'var(--accent2)' : utilizationPct < 95 ? 'var(--warn)' : 'var(--danger)';
+  const grColor   = growth > 1 ? 'var(--accent2)' : growth < -1 ? 'var(--danger)' : 'var(--text2)';
+  const grTxt     = growth > 1 ? `↑ ${growth}%` : growth < -1 ? `↓ ${Math.abs(growth)}%` : `≈ ${growth}%`;
+  const periodLbl = days ? `за ${days} дн.` : 'за день';
   summaryEl.innerHTML = `
-    ${days ? `<div class="stat-box"><div class="stat-num">${periodBatches.length}</div><div class="stat-lbl">Варок за ${days} дн.</div></div>` : ''}
-    <div class="stat-box"><div class="stat-num" style="color:var(--accent2);">${totalFact}</div><div class="stat-lbl">Выпущено шт</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:${Math.abs(avgDevPct)<=3?'var(--accent2)':'var(--warn)'};">${avgDevPct>0?'+':''}${avgDevPct.toFixed(1)}%</div><div class="stat-lbl">Среднее отклонение</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:${utilizationPct>=80?'var(--warn)':'var(--accent)'};">${utilizationPct}%</div><div class="stat-lbl">Загрузка реакторов</div></div>
+    <div class="dash-kpi"><div class="dash-kpi-top"><div class="dash-kpi-lbl">Варок ${periodLbl}</div>${hasGrowth ? chip(grTxt, grColor) : ''}</div><div class="dash-kpi-val">${periodBatches.length}</div><div class="dash-kpi-foot">${hasGrowth ? 'к прошлому периоду' : 'выберите период'}</div></div>
+    <div class="dash-kpi"><div class="dash-kpi-top"><div class="dash-kpi-lbl">Выпущено, шт</div>${chip(doneP + '% плана', devColor)}</div><div class="dash-kpi-val">${nf(totalFact)}</div><div class="dash-kpi-foot">план ${nf(totalPlan)} шт</div></div>
+    <div class="dash-kpi"><div class="dash-kpi-top"><div class="dash-kpi-lbl">Отклонение</div>${chip(Math.abs(avgDevPct) <= 3 ? 'в норме' : 'вне допуска', devColor)}</div><div class="dash-kpi-val">${avgDevPct>0?'+':''}${avgDevPct.toFixed(1)}%</div><div class="dash-kpi-foot">допуск ±3%</div></div>
+    <div class="dash-kpi"><div class="dash-kpi-top"><div class="dash-kpi-lbl">Загрузка реакторов</div>${chip(utilizationPct < 80 ? 'норма' : utilizationPct < 95 ? 'высокая' : 'перегруз', utilColor)}</div><div class="dash-kpi-val">${utilizationPct}%</div><div class="dash-kpi-foot">${state.reactors.length} ${pluralRu(state.reactors.length,'реактор','реактора','реакторов')}</div></div>
   `;
 
-  // ── Отклонения по продуктам ──
+  // ── Загрузка реакторов за период ──
+  const loadList = document.getElementById('bi-reactor-load-list');
+  if (loadList) {
+    if (!state.reactors.length) {
+      loadList.innerHTML = `<div class="dash-empty">Нет реакторов</div>`;
+    } else {
+      let avgAcc = 0;
+      loadList.innerHTML = state.reactors.map((r,i) => {
+        const rHours = periodBatches.filter(b => b.reactor === r && b.status !== 'cancelled').reduce((s,b)=>s+(b.brewHours||0),0);
+        const rMax = effDays * state.workdayHours;
+        const pct = rMax ? Math.min(100, Math.round(rHours / rMax * 100)) : 0;
+        avgAcc += pct;
+        const col = pct >= 95 ? 'var(--danger)' : pct >= 80 ? 'var(--warn)' : `var(--r${(i%8)+1})`;
+        return `<div class="dash-rbar">
+          <div class="dash-rbar-name" title="${r}">${r}</div>
+          <div class="dash-rbar-track"><div class="dash-rbar-fill" style="width:${pct}%; background:${col};">${rHours}ч</div></div>
+          <div class="dash-rbar-pct" style="color:${col};">${pct}%</div>
+        </div>`;
+      }).join('');
+      const badge = document.getElementById('bi-react-badge');
+      if (badge) badge.textContent = 'средн. ' + Math.round(avgAcc / state.reactors.length) + '%';
+    }
+  }
+
+  // ── Линии розлива за период: доля выпуска, партии, штуки ──
+  const linesListEl = document.getElementById('bi-pouring-lines-list');
+  const stackEl = document.getElementById('bi-lines-stack');
+  if (linesListEl) {
+    const poBatches = periodBatches.filter(b => b.pouringLine);
+    if (!state.pouringLines.length || !poBatches.length) {
+      if (stackEl) stackEl.innerHTML = '';
+      linesListEl.innerHTML = `<div class="dash-empty">Нет данных по розливу за период</div>`;
+    } else {
+      const totalLineQty = poBatches.reduce((s,b) => s + (b.factQty||0), 0) || 1;
+      const rows = state.pouringLines.map((l,i) => {
+        const lb = poBatches.filter(b => b.pouringLine === l);
+        const qty = lb.reduce((s,b) => s + (b.factQty||0), 0);
+        return { l, qty, parts: lb.length, share: Math.round(qty / totalLineQty * 100), col: `var(--r${(i%8)+1})` };
+      }).filter(x => x.parts > 0);
+      if (stackEl) stackEl.innerHTML = rows.map(x => `<span style="width:${x.share}%; background:${x.col};"></span>`).join('');
+      linesListEl.innerHTML = rows.map(x => `<div class="dash-pl">
+        <div class="dash-pl-top"><div class="dash-pl-name"><span class="dash-pl-dot" style="background:${x.col};"></span>${x.l}</div><div class="dash-pl-share" style="color:${x.col};">${x.share}%</div></div>
+        <div class="dash-pl-bar"><i style="width:${x.share}%; background:${x.col};"></i></div>
+        <div class="dash-pl-meta"><span><b>${nf(x.qty)}</b> шт</span><span><b>${x.parts}</b> ${pluralRu(x.parts,'партия','партии','партий')}</span><span>≈&nbsp;<b>${nf(Math.round(x.qty / x.parts))}</b> шт/парт.</span></div>
+      </div>`).join('');
+    }
+  }
+
+  // ── Выполнение плана по продуктам (шкала: метка = 100% плана) ──
   const bySku = {};
   doneBatches.forEach(b => {
     if (!bySku[b.sku]) bySku[b.sku] = { name: b.name, plan: 0, fact: 0, count: 0 };
@@ -4048,82 +4271,24 @@ function renderBiAnalytics() {
   });
   const devList = document.getElementById('bi-deviation-list');
   const skuRows = Object.values(bySku).sort((a,b) => b.count - a.count);
-  if (!skuRows.length) {
-    devList.innerHTML = `<div class="empty-state" style="padding:20px;"><div style="font-size:13px;">Нет завершённых партий за период</div></div>`;
-  } else {
-    devList.innerHTML = skuRows.map(s => {
-      const dev = s.plan ? ((s.fact - s.plan) / s.plan * 100) : 0;
-      const color = Math.abs(dev) <= 3 ? 'var(--accent2)' : 'var(--warn)';
-      return `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
-        <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.name}</div>
-        <div style="color:var(--text2); font-size:11px;">${s.count} парт.</div>
-        <div style="font-weight:700; color:${color}; width:55px; text-align:right;">${dev>0?'+':''}${dev.toFixed(1)}%</div>
-      </div>`;
-    }).join('');
-  }
-
-  // ── Загрузка реакторов за период ──
-  const loadList = document.getElementById('bi-reactor-load-list');
-  loadList.innerHTML = state.reactors.map((r,i) => {
-    const rHours = periodBatches.filter(b => b.reactor === r && b.status !== 'cancelled').reduce((s,b)=>s+(b.brewHours||0),0);
-    const rMax = days * state.workdayHours;
-    const pct = rMax ? Math.min(100, Math.round(rHours / rMax * 100)) : 0;
-    return `<div style="margin-bottom:10px;">
-      <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
-        <span style="font-weight:600;">${r}</span>
-        <span style="color:var(--text2);">${rHours}ч / ${rMax}ч (${pct}%)</span>
-      </div>
-      <div class="cal-load-bar"><div class="cal-load-fill" style="width:${pct}%; background:var(--r${(i%8)+1});"></div></div>
-    </div>`;
-  }).join('');
-
-  // ── Линии розлива за период — без учёта скорости/часов (по факту):
-  // сколько партий и штук прошло через каждую линию, и сколько суммарно заняло времени ──
-  const linesListEl = document.getElementById('bi-pouring-lines-list');
-  if (linesListEl) {
-    const poBatches = periodBatches.filter(b => b.pouringLine);
-    if (!state.pouringLines.length || !poBatches.length) {
-      linesListEl.innerHTML = `<div class="empty-state" style="padding:20px;"><div style="font-size:13px;">Нет данных по розливу за период</div></div>`;
+  if (devList) {
+    if (!skuRows.length) {
+      devList.innerHTML = `<div class="dash-empty">Нет завершённых партий за период</div>`;
     } else {
-      const totalLineQty = poBatches.reduce((s,b) => s + (b.factQty||0), 0);
-      linesListEl.innerHTML = state.pouringLines.map((l,i) => {
-        const lineBatches = poBatches.filter(b => b.pouringLine === l);
-        const qty = lineBatches.reduce((s,b) => s + (b.factQty||0), 0);
-        const totalMs = lineBatches.filter(b => b.pouringStartedAt && b.pouringEndedAt)
-          .reduce((s,b) => s + (new Date(b.pouringEndedAt) - new Date(b.pouringStartedAt)), 0);
-        const pct = totalLineQty ? Math.round(qty / totalLineQty * 100) : 0;
-        return `<div style="margin-bottom:10px;">
-          <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
-            <span style="font-weight:600;">${l}</span>
-            <span style="color:var(--text2);">${lineBatches.length} парт. · ${qty} шт${totalMs ? ` · ${formatDuration(totalMs)}` : ''}</span>
-          </div>
-          <div class="cal-load-bar"><div class="cal-load-fill" style="width:${pct}%; background:var(--r${(i%8)+1});"></div></div>
+      const SCALE = 150, markLeft = 100 / SCALE * 100;
+      devList.innerHTML = skuRows.map(s => {
+        const dev = s.plan ? ((s.fact - s.plan) / s.plan * 100) : 0;
+        const done = 100 + dev;
+        const col = Math.abs(dev) <= 3 ? 'var(--accent2)' : Math.abs(dev) <= 6 ? 'var(--warn)' : 'var(--danger)';
+        const w = Math.min(100, Math.max(0, done / SCALE * 100));
+        return `<div class="dash-pb">
+          <div class="dash-pb-top"><div class="dash-pb-name" title="${s.name}">${s.name}</div><div class="dash-pb-val" style="color:${col};">${Math.round(done)}%</div></div>
+          <div class="dash-pb-track"><div class="dash-pb-fill" style="width:${w}%; background:${col};">${nf(s.fact)}</div><div class="dash-pb-mark" style="left:${markLeft}%;"></div></div>
+          <div class="dash-pb-sub">план ${nf(s.plan)} шт · ${s.count} ${pluralRu(s.count,'партия','партии','партий')}</div>
         </div>`;
       }).join('');
     }
   }
-
-  // ── Динамика выпуска по дням ──
-  const chartEl = document.getElementById('bi-daily-chart');
-  const dailyData = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = fmtDate(addDays(today, -i));
-    const dBatches = state.batches.filter(b => b.brewDate === d && b.status === 'done');
-    const fact = dBatches.reduce((s,b)=>s+(b.factQty||0),0);
-    dailyData.push({ date: d, fact });
-  }
-  const maxFact = Math.max(1, ...dailyData.map(d => d.fact));
-  chartEl.innerHTML = `<div style="display:flex; align-items:flex-end; gap:${days>30?'2px':'6px'}; height:120px; padding-top:10px;">
-    ${dailyData.map(d => {
-      const h = Math.max(2, Math.round(d.fact / maxFact * 100));
-      const isToday = d.date === fmtDate(today);
-      return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:0;" title="${fmtDateHuman(d.date)}: ${d.fact} шт">
-        <div style="font-size:9px; color:var(--text2); ${days>14?'display:none;':''}">${d.fact||''}</div>
-        <div style="width:100%; max-width:28px; height:${h}px; background:${isToday?'var(--accent)':'var(--accent2)'}; border-radius:3px 3px 0 0;"></div>
-        <div style="font-size:9px; color:var(--text3); ${days>14?'display:none;':''}">${d.date.slice(8,10)}.${d.date.slice(5,7)}</div>
-      </div>`;
-    }).join('')}
-  </div>`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
