@@ -1408,19 +1408,29 @@
 #page-dashboard .dash-pulse-cell.dp-status{display:flex;flex-direction:column;justify-content:center;}
 @media(max-width:1100px){#page-dashboard .dash-pulse{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:640px){#page-dashboard .dash-pulse{grid-template-columns:repeat(2,1fr);}}
-/* Реакторы (Уровень 2) */
-#page-dashboard .dash-reactors{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px;margin-bottom:16px;}
-#page-dashboard .rc2{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;}
-#page-dashboard .rc2-h{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
-#page-dashboard .rc2-badge{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;}
-#page-dashboard .rc2-name{font-size:14px;font-weight:800;flex:1;}
-#page-dashboard .rc2-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
-#page-dashboard .rc2-prod{font-size:12.5px;color:var(--text2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;}
-#page-dashboard .rc2-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;}
-#page-dashboard .rc2-k{color:var(--text3);}
-#page-dashboard .rc2-v{font-weight:700;}
-#page-dashboard .rc2-metrics{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--text2);border-top:1px solid var(--border);padding-top:9px;}
-#page-dashboard .rc2-metrics b{color:var(--text);font-weight:700;}
+/* Реакторы (Уровень 2) — компактный список-таблица */
+#page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:6px 16px;}
+#page-dashboard .dash-rl-scroll{overflow-x:auto;}
+#page-dashboard .dash-rl-row{display:grid;grid-template-columns:118px 118px minmax(0,1fr) 54px 132px 130px;align-items:center;gap:12px;min-width:620px;}
+#page-dashboard .dash-rl-head{padding:6px 0 10px;border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);}
+#page-dashboard .dash-rl-r{padding:10px 0;border-bottom:1px solid var(--border);}
+#page-dashboard .dash-rl-r:last-child{border-bottom:0;}
+#page-dashboard .dash-rl-rc{display:flex;align-items:center;gap:9px;min-width:0;}
+#page-dashboard .dash-rl-badge{width:28px;height:28px;border-radius:8px;color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+#page-dashboard .dash-rl-name{font-size:14px;font-weight:800;}
+#page-dashboard .dash-rl-pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;}
+#page-dashboard .dash-rl-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+#page-dashboard .dash-rl-prod{font-size:13px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .dash-rl-num{text-align:right;font-size:13px;font-weight:700;color:var(--text);}
+#page-dashboard .dash-rl-out{text-align:right;font-size:13px;}
+#page-dashboard .dash-rl-out b{font-weight:800;color:var(--text);}
+#page-dashboard .dash-rl-out span{color:var(--text3);font-size:11.5px;}
+#page-dashboard .dash-rl-load{display:flex;align-items:center;gap:8px;}
+#page-dashboard .dash-rl-bar{flex:1;height:7px;background:var(--surface2);border-radius:5px;overflow:hidden;}
+#page-dashboard .dash-rl-bar>i{display:block;height:100%;border-radius:5px;}
+#page-dashboard .dash-rl-lh{font-size:11.5px;color:var(--text2);white-space:nowrap;min-width:38px;text-align:right;}
+#page-dashboard .dash-rl-r.idle .dash-rl-prod,#page-dashboard .dash-rl-r.idle .dash-rl-num,#page-dashboard .dash-rl-r.idle .dash-rl-out{color:var(--text3);}
+#page-dashboard .dash-rl-r.idle .dash-rl-name{color:var(--text2);}
 /* week day tiles */
 #page-dashboard .dash-week-nav{display:flex;align-items:center;gap:8px;}
 #page-dashboard .dash-wk-label{font-size:12.5px;color:var(--text2);font-weight:600;min-width:150px;text-align:center;}
@@ -1486,8 +1496,7 @@
 #page-dashboard .dash-empty{padding:22px;text-align:center;font-size:13px;color:var(--text3);}
 body.theme-light #page-dashboard .dash-card,
 body.theme-light #page-dashboard .dash-kpi,
-body.theme-light #page-dashboard .dash-pulse-cell,
-body.theme-light #page-dashboard .rc2{box-shadow:0 1px 3px rgba(20,30,60,.06), 0 1px 2px rgba(20,30,60,.04);}
+body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,30,60,.06), 0 1px 2px rgba(20,30,60,.04);}
 @media(max-width:560px){#page-dashboard .dash-days{gap:6px;}#page-dashboard .dash-day-tile{height:90px;}#page-dashboard .dash-day-val{font-size:12px;}}
 </style>
 <div class="page page-wide" id="page-dashboard">
@@ -1523,7 +1532,9 @@ body.theme-light #page-dashboard .rc2{box-shadow:0 1px 3px rgba(20,30,60,.06), 0
     <div style="font-size:15px; font-weight:700;">Реакторы</div>
     <span class="dash-badge" id="dash-reactors-badge">—</span>
   </div>
-  <div class="dash-reactors" id="dash-reactor-cards"></div>
+  <div class="dash-card dash-rl-wrap">
+    <div class="dash-rl-scroll" id="dash-reactor-cards"></div>
+  </div>
 
   <!-- Выпуск по дням — недельные плитки (горизонты «День»/«Неделя») -->
   <div class="dash-card" id="bi-week-card">
@@ -4367,9 +4378,9 @@ function renderDashboard() {
 // BI АНАЛИТИКА
 // ════════════════════════════════════════════════════════════════════════════
 
-// Уровень 2 «Реакторы» — карточки Р-1…Р-N. День: live-статус, продукт, время факт/норматив.
-// Неделя/Месяц: агрегат за окно (варок, выпуск, загрузка, работал/простой).
-const DASH_IDLE_HOURS = 2; // порог «Простой»: если реактор без активной варки и последняя активность старше N часов
+// Уровень 2 «Реакторы» — компактный список-таблица (строка на реактор).
+// День: live-статус (Варит/Розлив/Ожидание/Простой) + время варки в тултипе.
+// Неделя/Месяц: агрегат за окно (Работал/Простой, топ-SKU, варок/выпуск/загрузка).
 function renderReactorCards(range) {
   const el = document.getElementById('dash-reactor-cards');
   if (!el) return;
@@ -4383,69 +4394,68 @@ function renderReactorCards(range) {
   const fmtHM = ms => { const m = Math.max(0, Math.round(ms / 60000)); return Math.floor(m / 60) + 'ч ' + String(m % 60).padStart(2, '0') + 'м'; };
 
   if (!state.reactors.length) { el.innerHTML = `<div class="dash-empty">Нет реакторов</div>`; return; }
-  let workingCount = 0;
-  el.innerHTML = state.reactors.map((r, i) => {
-    const rc = (i % 8) + 1;
+
+  // предрасчёт по каждому реактору за окно
+  const per = state.reactors.map((r, i) => {
     const rb = state.batches.filter(b => b.reactor === r && b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
     const doneB = rb.filter(b => b.status === 'done');
-    const factQty = doneB.reduce((s, b) => s + (b.factQty || 0), 0);
-    const factKg = doneB.reduce((s, b) => s + (b.factQty || 0) * taraOf(b), 0);
-    const loadH = rb.reduce((s, b) => s + (b.brewHours || 0), 0);
-    const cardHead = (stTxt, stCol) => `<div class="rc2-h">
-        <div class="rc2-badge" style="background:var(--r${rc})">${r}</div>
-        <div class="rc2-name">${r}</div>
-        <span class="rc2-status" style="color:${stCol};background:color-mix(in srgb, ${stCol} 14%, transparent)">${stTxt}</span>
-      </div>`;
+    return {
+      r, rc: (i % 8) + 1, rb, doneB,
+      factQty: doneB.reduce((s, b) => s + (b.factQty || 0), 0),
+      factKg: doneB.reduce((s, b) => s + (b.factQty || 0) * taraOf(b), 0),
+      loadH: rb.reduce((s, b) => s + (b.brewHours || 0), 0)
+    };
+  });
+  const maxLoad = Math.max(1, ...per.map(p => p.loadH));
+  const barCol = pct => pct >= 100 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--accent2)';
 
+  let workingCount = 0;
+  const rows = per.map(p => {
+    const { r, rc, rb, doneB, factQty, factKg, loadH } = p;
+    let stTxt, stCol, prod, title = '';
     if (isDay) {
-      // ── live-режим (как в Уровне 2): статус по текущей стадии ──
       const active = rb.filter(b => b.status !== 'done');
       const brewing = active.find(b => getBatchStage(b) === 'brewing');
       const pouring = active.find(b => getBatchStage(b) === 'pouring');
       const waiting = active.find(b => ['queued', 'assigned'].includes(getBatchStage(b)));
-      let stTxt, stCol, cur = null;
+      let cur = null;
       if (brewing) { stTxt = 'Варит'; stCol = 'var(--accent2)'; cur = brewing; workingCount++; }
       else if (pouring) { stTxt = 'Розлив'; stCol = 'var(--accent2)'; cur = pouring; workingCount++; }
       else if (waiting) { stTxt = 'Ожидание'; stCol = 'var(--warn)'; cur = waiting; }
       else { stTxt = 'Простой'; stCol = 'var(--danger)'; cur = doneB[doneB.length - 1] || null; }
-      let timeRow = '';
+      prod = cur ? cur.name : '—';
       if (brewing && brewing.brewStartedAt) {
         const factMs = now - new Date(brewing.brewStartedAt);
         const normH = (recBySku[brewing.sku] && recBySku[brewing.sku].brewHours) || brewing.brewHours || 0;
-        const over = normH && (factMs / 3600000) > normH;
-        timeRow = `<div class="rc2-row"><span class="rc2-k">Время варки</span><span class="rc2-v" style="color:${over ? 'var(--danger)' : 'var(--text)'}">${fmtHM(factMs)} / ${normH}ч</span></div>`;
+        title = `Время варки: ${fmtHM(factMs)} / ${normH}ч`;
       }
-      const prod = cur ? cur.name : '—';
-      return `<div class="rc2">
-      ${cardHead(stTxt, stCol)}
-      <div class="rc2-prod" title="${prod}">${prod}</div>
-      ${timeRow}
-      <div class="rc2-metrics">
-        <div><b>${doneB.length}</b> ${pluralRu(doneB.length,'варка','варки','варок')} за день</div>
-        <div>выпуск <b>${nf(factKg)}</b> кг · ${nf(factQty)} шт</div>
-        <div>загрузка <b>${loadH}</b>/${state.workdayHours} ч</div>
-      </div>
-    </div>`;
+    } else {
+      const worked = rb.length > 0;
+      if (worked) workingCount++;
+      stTxt = worked ? 'Работал' : 'Простой';
+      stCol = worked ? 'var(--accent2)' : 'var(--danger)';
+      const bySku = {}; rb.forEach(b => { const k = b.name || b.sku || '—'; bySku[k] = (bySku[k] || 0) + 1; });
+      const skus = Object.keys(bySku).sort((a, b) => bySku[b] - bySku[a]);
+      prod = skus.length ? (skus.length > 1 ? `${skus[0]} +${skus.length - 1}` : skus[0]) : '—';
     }
-
-    // ── агрегат за окно (Неделя/Месяц) ──
-    const worked = rb.length > 0;
-    if (worked) workingCount++;
-    const stTxt = worked ? 'Работал' : 'Простой';
-    const stCol = worked ? 'var(--accent2)' : 'var(--danger)';
-    const bySku = {}; rb.forEach(b => { const k = b.name || b.sku || '—'; bySku[k] = (bySku[k] || 0) + 1; });
-    const skus = Object.keys(bySku).sort((a, b) => bySku[b] - bySku[a]);
-    const prod = skus.length ? (skus.length > 1 ? `${skus[0]} +${skus.length - 1}` : skus[0]) : '—';
-    return `<div class="rc2">
-      ${cardHead(stTxt, stCol)}
-      <div class="rc2-prod" title="${prod}">${prod}</div>
-      <div class="rc2-metrics">
-        <div><b>${doneB.length}</b> ${pluralRu(doneB.length,'варка','варки','варок')} за период</div>
-        <div>выпуск <b>${nf(factKg)}</b> кг · ${nf(factQty)} шт</div>
-        <div>загрузка <b>${loadH}</b> ч всего</div>
-      </div>
+    const idle = stTxt === 'Простой';
+    const cap = isDay ? (state.workdayHours || 8) : maxLoad;
+    const pct = cap ? Math.min(100, Math.round(loadH / cap * 100)) : 0;
+    const lh = isDay ? `${loadH}/${state.workdayHours || 8} ч` : `${loadH} ч`;
+    const out = factKg > 0 ? `<b>${nf(factKg)}</b> кг <span>· ${nf(factQty)} шт</span>` : (idle ? '0' : '<span>—</span>');
+    return `<div class="dash-rl-row dash-rl-r${idle ? ' idle' : ''}">
+      <div class="dash-rl-rc"><span class="dash-rl-badge" style="background:var(--r${rc})${idle ? ';opacity:.55' : ''}">${r}</span><span class="dash-rl-name">${r}</span></div>
+      <div><span class="dash-rl-pill" style="color:${stCol};background:color-mix(in srgb, ${stCol} 13%, transparent)"${title ? ` title="${title}"` : ''}><span class="dash-rl-dot" style="background:currentColor"></span>${stTxt}</span></div>
+      <div class="dash-rl-prod" title="${prod}">${prod}</div>
+      <div class="dash-rl-num">${doneB.length}</div>
+      <div class="dash-rl-out">${out}</div>
+      <div class="dash-rl-load"><span class="dash-rl-bar"><i style="width:${loadH > 0 ? pct : 0}%;background:${loadH > 0 ? barCol(pct) : 'transparent'}"></i></span><span class="dash-rl-lh">${lh}</span></div>
     </div>`;
   }).join('');
+
+  el.innerHTML = `<div class="dash-rl-row dash-rl-head">
+      <div>Реактор</div><div>Статус</div><div>Продукт</div><div style="text-align:right">Варок</div><div style="text-align:right">Выпуск</div><div>Загрузка</div>
+    </div>${rows}`;
   const badge = document.getElementById('dash-reactors-badge');
   if (badge) badge.textContent = workingCount + ' из ' + state.reactors.length + (isDay ? ' в работе' : ' задействовано');
 }
