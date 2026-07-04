@@ -1305,7 +1305,7 @@
   .nav-tab:hover .ni { animation: none !important; }
 }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous"></script>
 <!-- Firebase SDK (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
@@ -1810,6 +1810,11 @@
         <div class="admin-menu-text"><div class="admin-menu-title">Журнал действий</div><div class="admin-menu-sub">Кто, что и когда сделал в системе</div></div>
         <span class="admin-menu-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
       </div>
+      <div class="admin-menu-row" onclick="downloadStateBackup()">
+        <span class="admin-menu-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        <div class="admin-menu-text"><div class="admin-menu-title">Резервная копия</div><div class="admin-menu-sub">Скачать все данные системы файлом (JSON)</div></div>
+        <span class="admin-menu-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
       <div class="admin-menu-row" onclick="openAdminSection('branding')">
         <span class="admin-menu-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></span>
         <div class="admin-menu-text"><div class="admin-menu-title">Брендинг</div><div class="admin-menu-sub">Название компании и логотип в шапке</div></div>
@@ -2239,7 +2244,7 @@
       </div>
       <div class="form-group">
         <label>Пароль</label>
-        <input type="text" id="role-password" placeholder="пароль" />
+        <input type="text" id="role-password" placeholder="пароль" class="login-pwd-masked" autocomplete="off" />
       </div>
     </div>
 
@@ -2752,10 +2757,91 @@ function logJournalEvent(opts) {
   if (state.journalEntries.length > JOURNAL_ENTRIES_MAX) state.journalEntries.length = JOURNAL_ENTRIES_MAX;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// БЕЗОПАСНОСТЬ: САНИТИЗАЦИЯ ТЕКСТА + ЛОКАЛЬНЫЕ РЕЗЕРВНЫЕ КОПИИ
+// ════════════════════════════════════════════════════════════════════════════
+
+// Обезвреживание пользовательского текста: угловые скобки заменяются на
+// визуально похожие ‹ ›, чтобы введённый текст никогда не исполнялся как HTML
+// в innerHTML-рендерах (защита от stored-XSS). Идемпотентно.
+function sanitizeUserText(s) {
+  if (typeof s !== 'string') return s;
+  return s.replace(/</g, '‹').replace(/>/g, '›');
+}
+
+// Санитизация всех полей state, куда пользователи вводят произвольный текст.
+// Пароли не трогаем (могут содержать любые символы и никогда не рендерятся).
+function sanitizeStateUserText() {
+  const sT = sanitizeUserText;
+  (state.batches || []).forEach(b => { if (b) { b.name = sT(b.name); b.note = sT(b.note); b.client = sT(b.client); } });
+  (state.requests || []).forEach(r => { if (r) { r.name = sT(r.name); r.client = sT(r.client); r.note = sT(r.note); } });
+  if (Array.isArray(state.clients)) state.clients = state.clients.map(sT);
+  if (Array.isArray(state.wpClients)) state.wpClients = state.wpClients.map(sT);
+  if (Array.isArray(state.reactors)) state.reactors = state.reactors.map(sT);
+  if (Array.isArray(state.pouringLines)) state.pouringLines = state.pouringLines.map(sT);
+  (state.recipes || []).forEach(r => { if (r) { r.name = sT(r.name); if (Array.isArray(r.ingredients)) r.ingredients.forEach(i => { if (i) i.name = sT(i.name); }); } });
+  (state.roles || []).forEach(r => { if (r) { r.name = sT(r.name); r.login = sT(r.login); } });
+  if (state.companyName) state.companyName = sT(state.companyName);
+}
+
+// Кольцо локальных резервных копий (последние 5 версий state в localStorage).
+// Защита от случайной перезаписи/удаления данных — в т.ч. пришедших извне.
+// Восстановление из консоли: varkaBackups() — список, varkaRestoreBackup(N) — откат.
+const BACKUP_RING_KEY = 'varka_backup_ring';
+function backupRingPush() {
+  try {
+    if (!state.batches || !state.batches.length) return; // пустое состояние не бэкапим
+    const ring = JSON.parse(localStorage.getItem(BACKUP_RING_KEY) || '[]');
+    const rev = state._rev || 0;
+    if (ring.length && ring[ring.length - 1].rev === rev) return; // эта версия уже есть
+    ring.push({ ts: new Date().toISOString(), rev, data: JSON.stringify(state) });
+    while (ring.length > 5) ring.shift();
+    localStorage.setItem(BACKUP_RING_KEY, JSON.stringify(ring));
+  } catch (e) {
+    // Квота localStorage — оставляем только 2 последние копии
+    try {
+      const ring = JSON.parse(localStorage.getItem(BACKUP_RING_KEY) || '[]').slice(-2);
+      localStorage.setItem(BACKUP_RING_KEY, JSON.stringify(ring));
+    } catch (e2) {}
+  }
+}
+function varkaBackups() {
+  try {
+    return JSON.parse(localStorage.getItem(BACKUP_RING_KEY) || '[]').map((b, i) =>
+      ({ n: i, rev: b.rev, ts: b.ts, batches: (JSON.parse(b.data).batches || []).length }));
+  } catch (e) { return []; }
+}
+function varkaRestoreBackup(n) {
+  const ring = JSON.parse(localStorage.getItem(BACKUP_RING_KEY) || '[]');
+  const b = ring[n];
+  if (!b) { alert('Нет такой копии. Список копий: varkaBackups()'); return; }
+  if (!confirm('Откатить данные к версии rev ' + b.rev + ' от ' + b.ts + '? Текущее состояние будет заменено.')) return;
+  const restored = JSON.parse(b.data);
+  restored._rev = state._rev || restored._rev; // сохраняем счётчик версий, чтобы запись не отверглась как устаревшая
+  state = { ...state, ...restored };
+  saveState();
+  render();
+  if (typeof showToast === 'function') showToast('Данные восстановлены из локальной копии');
+}
+// Скачивание полной резервной копии файлом (кнопка в админ-панели)
+function downloadStateBackup() {
+  try {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'varka_backup_' + fmtDate(new Date()) + '_rev' + (state._rev || 0) + '.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    if (typeof logActivity === 'function') logActivity('Скачана резервная копия', { target: 'rev ' + (state._rev || 0) });
+  } catch (e) { alert('Не удалось сформировать копию: ' + e.message); }
+}
+
 function saveState() {
   // Применяем входящее обновление (storage другой вкладки / onSnapshot) — НЕ пишем обратно,
   // иначе вкладки зацикливаются: storage→render→saveState→storage→… («зависание» всех разделов).
   if (_applyingRemoteState) return;
+  sanitizeStateUserText(); // анти-XSS: обезвреживаем пользовательский текст перед сохранением
+  backupRingPush();        // локальная резервная копия текущей версии
   // Защита: не писать пустой state в Firestore при инициализации
   if (!_stateLoadedFromFirestore && db) {
     const hasData = (state.batches && state.batches.length > 0) ||
@@ -2855,6 +2941,7 @@ async function writeUserProfile(roleId) {
 // (когда наша запись отменена, потому что в облаке оказалась более свежая версия).
 function _applyRemoteState(data) {
   if (!data) return;
+  backupRingPush(); // страховка: сохраняем текущую локальную версию ДО приёма внешней
   _applyingRemoteState = true;
   try {
     state = { ...state, ...data };
