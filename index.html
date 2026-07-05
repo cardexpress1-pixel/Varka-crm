@@ -1434,6 +1434,24 @@
 #page-dashboard .dflow-ok{display:flex;align-items:center;gap:9px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);font-size:13px;color:var(--text2);font-weight:600;}
 #page-dashboard .dflow-ok i{width:9px;height:9px;border-radius:50%;display:inline-block;}
 @media(prefers-reduced-motion:reduce){#page-dashboard .dseg{transition:none;}}
+#page-dashboard .dash-tanks{display:flex;gap:14px;flex-wrap:wrap;padding:8px 2px 4px;}
+#page-dashboard .dash-tank{flex:1;min-width:72px;display:flex;flex-direction:column;align-items:center;gap:7px;}
+#page-dashboard .dash-tank-cyl{width:100%;max-width:78px;height:104px;border-radius:13px;background:var(--surface2);border:1px solid var(--border);position:relative;overflow:hidden;display:flex;align-items:flex-end;}
+#page-dashboard .dash-tank-fill{width:100%;border-radius:0 0 12px 12px;transition:height .9s cubic-bezier(.4,0,.2,1);}
+#page-dashboard .dash-tank.idle .dash-tank-cyl{opacity:.6;}
+#page-dashboard .dash-tank-badge{font-size:11px;font-weight:800;color:#fff;padding:2px 10px;border-radius:7px;}
+#page-dashboard .dash-tank-done{font-size:14px;font-weight:800;color:var(--text);line-height:1;}
+#page-dashboard .dash-tank.idle .dash-tank-done{color:var(--text3);}
+#page-dashboard .dash-tank-s{font-size:11px;color:var(--text2);font-weight:600;max-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
+#page-dashboard .dash-tank.idle .dash-tank-s{color:var(--text3);}
+#page-dashboard .dash-prod-wrap{display:flex;gap:22px;align-items:center;}
+#page-dashboard .dash-prod-ring{flex:none;}
+#page-dashboard .dash-prod-tblwrap{flex:1;min-width:0;overflow-x:auto;}
+#page-dashboard .dpr-v{fill:var(--text);font-size:23px;font-weight:800;}
+#page-dashboard .dpr-k{fill:var(--text2);font-size:9px;font-weight:600;}
+@media(max-width:640px){#page-dashboard .dash-prod-wrap{flex-direction:column;align-items:stretch;}}
+@media(prefers-reduced-motion:reduce){#page-dashboard .dash-tank-fill{transition:none;}}
+#page-dashboard .dash-prod-swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:middle;}
 /* Реакторы (Уровень 2) — компактный список-таблица */
 #page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:6px 16px;}
 #page-dashboard .dash-rl-scroll{overflow-x:auto;}
@@ -3881,13 +3899,14 @@ function renderDashWeekTiles() {
     week.push({ iso, plan, fact });
   }
   const maxFact = Math.max(1, ...week.map(d => d.fact));
+  const weekFact = week.reduce((s, d) => s + d.fact, 0);
   tilesEl.innerHTML = week.map((d, i) => {
-    const pct = d.plan ? Math.round(d.fact / d.plan * 100) : 0;
+    const pct = weekFact ? Math.round(d.fact / weekFact * 100) : 0;
     const barH = d.fact ? Math.max(16, Math.round(d.fact / maxFact * 102)) : 0;
     const isToday = d.iso === todayISO;
     const pctColor = barH > 26 ? '#fff' : (d.fact ? 'var(--accent)' : 'var(--text3)');
     const dd = new Date(d.iso);
-    const title = `${dd.getDate()} ${MONF[dd.getMonth()]}: ${d.fact.toLocaleString('ru-RU')} шт${d.plan ? ` · план ${d.plan.toLocaleString('ru-RU')} (${pct}%)` : ''}`;
+    const title = `${dd.getDate()} ${MONF[dd.getMonth()]}: ${d.fact.toLocaleString('ru-RU')} шт${weekFact ? ` · ${pct}% недели` : ''}`;
     return `<div class="dash-day">
       <div class="dash-day-val">${d.fact ? d.fact.toLocaleString('ru-RU') : '—'}${d.fact ? '<span>шт</span>' : ''}</div>
       <div class="dash-day-tile${isToday ? ' is-today' : ''}" title="${title}">
@@ -3905,11 +3924,10 @@ function renderDashWeekTiles() {
   week.forEach((d,idx) => { if (d.fact > week[bestIdx].fact) bestIdx = idx; });
   const sumEl = document.getElementById('bi-week-sum');
   if (sumEl) {
-    const donePct = wp ? Math.round(wf / wp * 100) : 0;
-    const dcol = Math.abs(donePct - 100) <= 3 ? 'var(--accent2)' : 'var(--warn)';
+    const activeDays = week.filter(d => d.fact > 0).length;
     sumEl.innerHTML = `
       <div class="dash-ws">Выпущено за неделю<b>${wf.toLocaleString('ru-RU')} шт</b></div>
-      <div class="dash-ws">Выполнение плана<b style="color:${wp ? dcol : 'var(--text3)'}">${wp ? donePct + '%' : '—'}</b></div>
+      <div class="dash-ws">Рабочих дней<b>${activeDays} из 7</b></div>
       <div class="dash-ws">Лучший день<b>${week[bestIdx].fact ? DN[bestIdx] + ', ' + week[bestIdx].fact.toLocaleString('ru-RU') + ' шт' : '—'}</b></div>`;
   }
 }
@@ -3949,7 +3967,7 @@ function renderMonthTrend(range) {
     const h = x.fact ? Math.max(6, Math.round(x.fact / maxFact * 100)) : 0;
     const cls = (hasData && i === bestIdx && x.fact) ? ' is-best' : (x.iso === todayISO ? ' is-today' : '');
     const showNum = x.d === 1 || x.d % 5 === 0 || (hasData && i === bestIdx) || x.iso === todayISO;
-    const title = `${x.d} ${DASH_MON_GEN[m]}: ${nf(x.fact)} шт${x.kg ? ` · ${nf(x.kg)} кг` : ''}${x.plan ? ` · план ${nf(x.plan)}` : ''}`;
+    const title = `${x.d} ${DASH_MON_GEN[m]}: ${nf(x.fact)} шт${x.kg ? ` · ${nf(x.kg)} кг` : ''}`;
     return `<div class="dash-mt-day" title="${title}">
       <div class="dash-mt-track"><div class="dash-mt-bar${cls}" style="height:${h}%"></div></div>
       <div class="dash-mt-num">${showNum ? x.d : ''}</div>
@@ -3965,7 +3983,6 @@ function renderMonthTrend(range) {
   const sumEl = document.getElementById('bi-month-sum');
   if (sumEl) sumEl.innerHTML = `
     <div class="dash-ws">Выпущено за месяц<b>${nf(totKg)} кг · ${nf(totFact)} шт</b></div>
-    <div class="dash-ws">Выполнение плана<b style="color:${dcol}">${totPlan ? donePct + '%' : '—'}</b></div>
     <div class="dash-ws">Лучший день<b>${hasData ? arr[bestIdx].d + ' ' + DASH_MON_GEN[m] + ', ' + nf(arr[bestIdx].fact) + ' шт' : '—'}</b></div>
     <div class="dash-ws">Рабочих дней<b>${activeDays} из ${daysInMonth}</b></div>`;
   const badge = document.getElementById('bi-month-badge');
@@ -4399,83 +4416,56 @@ function renderDashboard() {
 // Уровень 2 «Реакторы» — компактный список-таблица (строка на реактор).
 // День: live-статус (Варит/Розлив/Ожидание/Простой) + время варки в тултипе.
 // Неделя/Месяц: агрегат за окно (Работал/Простой, топ-SKU, варок/выпуск/загрузка).
+// Реакторы как танки-гейджи: уровень заливки = доля ВЫПОЛНЕННОГО по реактору за период
+// (выпущено / сварено по объёму). Пустой танк = реактор не задействован. Дашборд «выполнено/не выполнено».
 function renderReactorCards(range) {
   const el = document.getElementById('dash-reactor-cards');
   if (!el) return;
   range = range || dashRange();
-  const isDay = range.horizon === 'day';
-  const isToday = isDay && range.start === fmtDate(new Date());
-  const now = isToday ? new Date() : new Date(range.end + 'T23:59:59');
   const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
   const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
   const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
-  const fmtHM = ms => { const m = Math.max(0, Math.round(ms / 60000)); return Math.floor(m / 60) + 'ч ' + String(m % 60).padStart(2, '0') + 'м'; };
-
   if (!state.reactors.length) { el.innerHTML = `<div class="dash-empty">Нет реакторов</div>`; return; }
 
-  // предрасчёт по каждому реактору за окно
-  const per = state.reactors.map((r, i) => {
-    const rb = state.batches.filter(b => b.reactor === r && b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
-    const doneB = rb.filter(b => b.status === 'done');
-    return {
-      r, rc: (i % 8) + 1, rb, doneB,
-      factQty: doneB.reduce((s, b) => s + (b.factQty || 0), 0),
-      factKg: doneB.reduce((s, b) => s + (b.factQty || 0) * taraOf(b), 0),
-      loadH: rb.reduce((s, b) => s + (b.brewHours || 0), 0)
-    };
-  });
-  const maxLoad = Math.max(1, ...per.map(p => p.loadH));
-  const barCol = pct => pct >= 100 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--accent2)';
-
+  const brewedStages = new Set(['brewed', 'pouring', 'poured', 'finished']);
   let workingCount = 0;
-  const rows = per.map(p => {
-    const { r, rc, rb, doneB, factQty, factKg, loadH } = p;
-    let stTxt, stCol, prod, title = '';
-    if (isDay) {
-      const active = rb.filter(b => b.status !== 'done');
-      const brewing = active.find(b => getBatchStage(b) === 'brewing');
-      const pouring = active.find(b => getBatchStage(b) === 'pouring');
-      const waiting = active.find(b => ['queued', 'assigned'].includes(getBatchStage(b)));
-      let cur = null;
-      if (brewing) { stTxt = 'Варит'; stCol = 'var(--accent2)'; cur = brewing; workingCount++; }
-      else if (pouring) { stTxt = 'Розлив'; stCol = 'var(--accent2)'; cur = pouring; workingCount++; }
-      else if (waiting) { stTxt = 'Ожидание'; stCol = 'var(--warn)'; cur = waiting; }
-      else { stTxt = 'Простой'; stCol = 'var(--danger)'; cur = doneB[doneB.length - 1] || null; }
-      prod = cur ? cur.name : '—';
-      if (brewing && brewing.brewStartedAt) {
-        const factMs = now - new Date(brewing.brewStartedAt);
-        const normH = (recBySku[brewing.sku] && recBySku[brewing.sku].brewHours) || brewing.brewHours || 0;
-        title = `Время варки: ${fmtHM(factMs)} / ${normH}ч`;
-      }
-    } else {
-      const worked = rb.length > 0;
-      if (worked) workingCount++;
-      stTxt = worked ? 'Работал' : 'Простой';
-      stCol = worked ? 'var(--accent2)' : 'var(--danger)';
-      const bySku = {}; rb.forEach(b => { const k = b.name || b.sku || '—'; bySku[k] = (bySku[k] || 0) + 1; });
-      const skus = Object.keys(bySku).sort((a, b) => bySku[b] - bySku[a]);
-      prod = skus.length ? (skus.length > 1 ? `${skus[0]} +${skus.length - 1}` : skus[0]) : '—';
-    }
-    const idle = stTxt === 'Простой';
-    const cap = isDay ? (state.workdayHours || 8) : maxLoad;
-    const pct = cap ? Math.min(100, Math.round(loadH / cap * 100)) : 0;
-    const lh = isDay ? `${loadH}/${state.workdayHours || 8} ч` : `${loadH} ч`;
-    const out = factKg > 0 ? `<b>${nf(factKg)}</b> кг <span>· ${nf(factQty)} шт</span>` : (idle ? '0' : '<span>—</span>');
-    return `<div class="dash-rl-row dash-rl-r${idle ? ' idle' : ''}">
-      <div class="dash-rl-rc"><span class="dash-rl-badge" style="background:var(--r${rc})${idle ? ';opacity:.55' : ''}">${r}</span><span class="dash-rl-name">${r}</span></div>
-      <div><span class="dash-rl-pill" style="color:${stCol};background:color-mix(in srgb, ${stCol} 13%, transparent)"${title ? ` title="${title}"` : ''}><span class="dash-rl-dot" style="background:currentColor"></span>${stTxt}</span></div>
-      <div class="dash-rl-prod" title="${prod}">${prod}</div>
-      <div class="dash-rl-num">${doneB.length}</div>
-      <div class="dash-rl-out">${out}</div>
-      <div class="dash-rl-load"><span class="dash-rl-bar"><i style="width:${loadH > 0 ? pct : 0}%;background:${loadH > 0 ? barCol(pct) : 'transparent'}"></i></span><span class="dash-rl-lh">${lh}</span></div>
-    </div>`;
-  }).join('');
+  const tanks = state.reactors.map((r, i) => {
+    const rb = state.batches.filter(b => b.reactor === r && b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
+    const brewedB   = rb.filter(b => brewedStages.has(getBatchStage(b)));
+    const releasedB = brewedB.filter(b => b.factQty != null);
+    const brewedKg   = brewedB.reduce((s, b) => s + volOf(b), 0);
+    const releasedKg = releasedB.reduce((s, b) => s + volOf(b), 0);
+    const done = brewedKg > 0 ? Math.min(100, Math.round(releasedKg / brewedKg * 100)) : 0;
+    const active = rb.length > 0;
+    if (active) workingCount++;
+    const bySku = {}; rb.forEach(b => { const k = b.name || b.sku || '—'; bySku[k] = (bySku[k] || 0) + 1; });
+    const skus = Object.keys(bySku).sort((a, b) => bySku[b] - bySku[a]);
+    const prod = skus.length ? (skus.length > 1 ? `${skus[0]} +${skus.length - 1}` : skus[0]) : 'простой';
+    const fillCol = done >= 100 ? 'linear-gradient(180deg,#34d399,#10b981)' : 'linear-gradient(180deg,#3b82f6,#2563eb)';
+    return { r, rc: (i % 8) + 1, active, done, brewedKg, releasedKg, prod, fillCol };
+  });
 
-  el.innerHTML = `<div class="dash-rl-row dash-rl-head">
-      <div>Реактор</div><div>Статус</div><div>Продукт</div><div style="text-align:right">Варок</div><div style="text-align:right">Выпуск</div><div>Загрузка</div>
-    </div>${rows}`;
+  el.innerHTML = `<div class="dash-tanks">` + tanks.map(t => {
+    if (!t.active) {
+      return `<div class="dash-tank idle">
+        <div class="dash-tank-cyl"></div>
+        <span class="dash-tank-badge" style="background:var(--r${t.rc});opacity:.5">${t.r}</span>
+        <div class="dash-tank-done">—</div>
+        <div class="dash-tank-s">простой</div>
+      </div>`;
+    }
+    const h = Math.max(t.done > 0 ? 10 : 3, t.done);
+    return `<div class="dash-tank" title="${t.r}: сварено ${nf(t.brewedKg)} кг · выпущено ${nf(t.releasedKg)} кг">
+      <div class="dash-tank-cyl"><div class="dash-tank-fill" style="height:${h}%;background:${t.fillCol}"></div></div>
+      <span class="dash-tank-badge" style="background:var(--r${t.rc})">${t.r}</span>
+      <div class="dash-tank-done" style="color:${t.done >= 100 ? 'var(--accent2)' : 'var(--text)'}">${t.done}%</div>
+      <div class="dash-tank-s" title="${t.prod}">${t.prod}</div>
+    </div>`;
+  }).join('') + `</div>`;
+
   const badge = document.getElementById('dash-reactors-badge');
-  if (badge) badge.textContent = workingCount + ' из ' + state.reactors.length + (isDay ? ' в работе' : ' задействовано');
+  if (badge) badge.textContent = workingCount + ' из ' + state.reactors.length + ' задействовано';
 }
 
 // Уровень 3 «Продукты» — таблица по SKU за период: варок, выпуск (кг/шт), % от итога, реакторы.
@@ -4509,13 +4499,13 @@ function renderProducts(doneBatches) {
   const totCount = rows.reduce((s, r) => s + r.count, 0);
   const rIdx = r => { const i = state.reactors.indexOf(r); return i === -1 ? 999 : i; };
 
-  const body = rows.map(r => {
+  const body = rows.map((r, i) => {
     const share = totKg ? (r.kg / totKg * 100) : 0;
     const shareStr = share >= 9.95 ? Math.round(share) : share.toFixed(1);
     const tags = [...r.reactors].sort((a, b) => rIdx(a) - rIdx(b))
       .map(rn => `<span class="dash-prod-rtag" style="background:var(--r${reactorColor(rn)})">${rn}</span>`).join('');
     return `<tr>
-      <td><div class="dash-prod-name">${r.name}</div>${r.sku ? `<div class="dash-prod-sku">${r.sku}</div>` : ''}</td>
+      <td><div class="dash-prod-name"><span class="dash-prod-swatch" style="background:var(--r${(i % 8) + 1})"></span>${r.name}</div>${r.sku ? `<div class="dash-prod-sku">${r.sku}</div>` : ''}</td>
       <td class="num">${r.count}</td>
       <td class="num"><span class="dash-prod-kg">${nf(r.kg)}</span> <span class="dash-prod-pcs">кг · ${nf(r.qty)} шт</span></td>
       <td class="num"><span class="dash-prod-share"><span class="dash-prod-sbar"><i style="width:${Math.min(100, share)}%"></i></span><span class="dash-prod-sval">${shareStr}%</span></span></td>
@@ -4523,7 +4513,23 @@ function renderProducts(doneBatches) {
     </tr>`;
   }).join('');
 
-  el.innerHTML = `<table class="dash-prod-tbl">
+  const RR = 47, CC = 2 * Math.PI * RR;
+  let ringOff = 0;
+  const ringSegs = rows.map((r, i) => {
+    const len = totKg ? (r.kg / totKg) * CC : 0;
+    const seg = `<circle cx="60" cy="60" r="${RR}" fill="none" stroke="var(--r${(i % 8) + 1})" stroke-width="15" stroke-dasharray="${len.toFixed(1)} ${(CC - len).toFixed(1)}" stroke-dashoffset="${(-ringOff).toFixed(1)}"></circle>`;
+    ringOff += len;
+    return seg;
+  }).join('');
+  const donut = `<div class="dash-prod-ring">
+    <svg viewBox="0 0 120 120" width="122" height="122" role="img" aria-label="Кольцо выпуска по продуктам">
+      <g transform="rotate(-90 60 60)">${ringSegs}</g>
+      <text x="60" y="56" text-anchor="middle" class="dpr-v">${nf(totQty)}</text>
+      <text x="60" y="74" text-anchor="middle" class="dpr-k">шт выпущено</text>
+    </svg>
+  </div>`;
+
+  const table = `<table class="dash-prod-tbl">
     <thead><tr><th>Продукт</th><th class="num">Варок</th><th class="num">Выпущено</th><th class="num">% от итога</th><th>Реакторы</th></tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr>
@@ -4534,6 +4540,8 @@ function renderProducts(doneBatches) {
       <td>—</td>
     </tr></tfoot>
   </table>`;
+
+  el.innerHTML = `<div class="dash-prod-wrap">${donut}<div class="dash-prod-tblwrap">${table}</div></div>`;
 }
 
 // Уровень 1 «Пульс дня» — 5 фактических показателей по окну горизонта (День/Неделя/Месяц).
