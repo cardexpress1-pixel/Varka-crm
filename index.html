@@ -1577,7 +1577,7 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
 
   <!-- Реакторы -->
   <div class="dash-card dash-rl-wrap">
-    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--accent2)"></span>Реакторы</div><span class="dash-badge" id="dash-reactors-badge">—</span></div>
+    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--accent2)"></span>Загрузка реакторов</div><span class="dash-badge" id="dash-reactors-badge">—</span></div>
     <div class="dash-rl-scroll" id="dash-reactor-cards"></div>
   </div>
 
@@ -1589,7 +1589,7 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
 
   <!-- Уровень 3 — Продукты -->
   <div class="dash-card" id="bi-products-card" style="margin-bottom:0;">
-    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--r4)"></span>Продукты</div><span class="dash-badge">выпущено · по SKU</span></div>
+    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--r4)"></span>Выпуск по продуктам</div><span class="dash-badge">выпущено · по SKU</span></div>
     <div id="bi-products"></div>
   </div>
 
@@ -4440,7 +4440,9 @@ function renderPulseDay(range) {
     ? new Set(periodBatches.filter(b => { const st = getBatchStage(b); return st === 'brewing' || st === 'pouring'; }).map(b => b.reactor)).size
     : new Set(periodBatches.map(b => b.reactor).filter(Boolean)).size;
 
-  const reactSub = isToday ? 'варят / разливают' : 'задействовано';
+  const avgBrewKg = brewedB.length ? brewedKg / brewedB.length : 0;   // средняя варка (кг)
+  const skuN = new Set(releasedB.map(b => b.sku || b.name).filter(Boolean)).size; // ассортимент выпуска
+  const idleReactors = Math.max(0, state.reactors.length - liveReactors);
   const pluVar = n => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? 'варок' : (b === 1 ? 'варка' : (b >= 2 && b <= 4 ? 'варки' : 'варок')); };
   const SW = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
   const ic = {
@@ -4457,11 +4459,11 @@ function renderPulseDay(range) {
   </div>`;
 
   el.innerHTML =
-    kt('linear-gradient(135deg,#3b82f6,#1d4ed8)', 'Сварено', ic.brew, `${tf(brewedKg)}<small> т</small>`, 'за период', `${nf(brewedKg)} кг`) +
-    kt('linear-gradient(135deg,#10b981,#047857)', 'Выпущено', ic.out, `${nf(releasedQty)}<small> шт</small>`, 'розлив закрыт', `${nf(releasedKg)} кг`) +
-    kt('linear-gradient(135deg,#8b5cf6,#6d28d9)', 'Варок', ic.vark, `${totalCount}`, 'за период', `${releasedB.length} с розливом`) +
-    kt('linear-gradient(135deg,#06b6d4,#0e7490)', 'Реакторов', ic.reac, `${liveReactors}<small> / ${state.reactors.length}</small>`, reactSub, `${state.reactors.length} всего`) +
-    kt('linear-gradient(135deg,#f59e0b,#ea580c)', 'Ожидает розлива', ic.wait, `${tf(awaitingKg)}<small> т</small>`, 'не выполнено', `${awaitingB.length} ${pluVar(awaitingB.length)}`);
+    kt('linear-gradient(135deg,#3b82f6,#1d4ed8)', 'Сварено', ic.brew, `${tf(brewedKg)}<small> т</small>`, 'средняя варка', brewedB.length ? `~${nf(avgBrewKg)} кг` : '—') +
+    kt('linear-gradient(135deg,#10b981,#047857)', 'Выпущено', ic.out, `${nf(releasedQty)}<small> шт</small>`, 'ассортимент', `${skuN} SKU`) +
+    kt('linear-gradient(135deg,#8b5cf6,#6d28d9)', 'Варок', ic.vark, `${totalCount}`, 'завершено', `${releasedB.length}`) +
+    kt('linear-gradient(135deg,#06b6d4,#0e7490)', 'Реакторов', ic.reac, `${liveReactors}<small> / ${state.reactors.length}</small>`, 'свободно', `${idleReactors}`) +
+    kt('linear-gradient(135deg,#f59e0b,#ea580c)', 'Ожидает розлива', ic.wait, `${tf(awaitingKg)}<small> т</small>`, 'ожидает', `${awaitingB.length} ${pluVar(awaitingB.length)}`);
 }
 
 // «Поток продукции» — Сварено = Выпущено (выполнено) + Ожидает розлива (не выполнено) + детектор задержек.
@@ -4527,7 +4529,7 @@ function renderDashFlow(range) {
   }
 
   el.innerHTML = `<div class="dflow-card">
-    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--accent)"></span>Поток продукции</div><span class="dash-badge">${tf(totKg)} т сварено</span></div>
+    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--accent)"></span>Выполнение розлива</div><span class="dash-badge">${tf(totKg)} т сварено</span></div>
     ${bar}${legend}${tail}
   </div>`;
 }
