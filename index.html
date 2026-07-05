@@ -1502,6 +1502,47 @@
 @keyframes dbGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @media(max-width:560px){#page-dashboard .db-bar{grid-template-columns:minmax(0,110px) 1fr 66px;gap:9px;}}
 @media(prefers-reduced-motion:reduce){#page-dashboard .db-bar .tr>i{animation:none;}}
+#page-dashboard .db-donut-wrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap;}
+#page-dashboard .db-donut{filter:drop-shadow(0 6px 14px color-mix(in srgb,var(--dbc) 40%,transparent));}
+#page-dashboard .db-dc-v{fill:var(--text);font-size:24px;font-weight:800;}
+#page-dashboard .db-dc-k{fill:var(--text2);font-size:9.5px;font-weight:600;}
+#page-dashboard .db-leg{display:grid;gap:10px;flex:1;min-width:190px;}
+#page-dashboard .db-leg-i{display:flex;align-items:center;gap:9px;font-size:13px;}
+#page-dashboard .db-leg-i .db-dot{width:10px;height:10px;border-radius:4px;flex:none;}
+#page-dashboard .db-leg-i .nm{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .db-leg-i b{margin-left:auto;font-weight:800;color:var(--text);}
+#page-dashboard .db-leg-i .pc{color:var(--text3);width:40px;text-align:right;}
+#page-dashboard .db-lines{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:grid;gap:9px;}
+#page-dashboard .db-lines-h{font-size:10.5px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+#page-dashboard .db-lrow{display:grid;grid-template-columns:90px 1fr 60px;align-items:center;gap:11px;font-size:13px;}
+#page-dashboard .db-lrow .nm{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .db-lrow .tr{height:9px;border-radius:5px;background:var(--surface2);overflow:hidden;}
+#page-dashboard .db-lrow .tr>i{display:block;height:100%;border-radius:5px;transform-origin:left;animation:dbGrow .8s cubic-bezier(.3,.1,.2,1) both;}
+#page-dashboard .db-lrow b{text-align:right;font-weight:800;color:var(--text);}
+#page-dashboard .db-st-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(94px,1fr));gap:10px;margin-bottom:14px;}
+#page-dashboard .db-st{background:var(--surface2);border-radius:12px;padding:11px 13px;border-left:3px solid var(--sc);}
+#page-dashboard .db-st .n{font-size:22px;font-weight:800;line-height:1;color:var(--text);}
+#page-dashboard .db-st .l{font-size:11px;color:var(--text2);font-weight:600;margin-top:6px;}
+#page-dashboard .db-stacked{display:flex;height:15px;border-radius:8px;overflow:hidden;gap:2px;}
+#page-dashboard .db-stacked>span{height:100%;transform-origin:left;animation:dbGrow .8s cubic-bezier(.3,.1,.2,1) both;}
+#page-dashboard .db-cap{font-size:12.5px;color:var(--text2);font-weight:500;margin-top:12px;}
+#page-dashboard .db-cap b{color:var(--text);font-weight:800;}
+#page-dashboard .db-days-h{font-size:10.5px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
+#page-dashboard .db-days{display:flex;align-items:flex-end;gap:3px;height:72px;}
+#page-dashboard .db-day{flex:1;min-width:3px;height:100%;display:flex;align-items:flex-end;}
+#page-dashboard .db-day-bar{width:100%;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#a78bfa,#7c3aed);transform-origin:bottom;animation:dbGrowY .8s cubic-bezier(.3,.1,.2,1) both;}
+#page-dashboard .db-delays{display:grid;gap:9px;}
+#page-dashboard .db-al{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:13px;background:var(--surface2);border:1px solid var(--border);}
+#page-dashboard .db-al.over{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border-color:color-mix(in srgb,var(--danger) 34%,var(--border));}
+#page-dashboard .db-ai{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;}
+#page-dashboard .db-ai svg{width:16px;height:16px;}
+#page-dashboard .db-atx{font-size:13px;font-weight:700;color:var(--text);}
+#page-dashboard .db-atx small{display:block;font-size:11.5px;color:var(--text2);font-weight:500;margin-top:1px;}
+#page-dashboard .db-aw{margin-left:auto;font-size:12.5px;font-weight:800;white-space:nowrap;}
+#page-dashboard .db-ok{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600;}
+#page-dashboard .db-ok-dot{width:9px;height:9px;border-radius:50%;background:var(--accent2);}
+@keyframes dbGrowY{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@media(prefers-reduced-motion:reduce){#page-dashboard .db-lrow .tr>i,#page-dashboard .db-stacked>span,#page-dashboard .db-day-bar{animation:none;}}
 /* Реакторы (Уровень 2) — компактный список-таблица */
 #page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:14px 18px;}
 #page-dashboard .dash-rl-scroll{overflow-x:auto;}
@@ -1619,26 +1660,17 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
   <!-- Деталь: Сварено — по продуктам -->
   <div id="dash-brewed"></div>
 
-  <!-- Поток продукции: Сварено = Выпущено + Ожидает + задержки -->
-  <div class="dash-flow" id="dash-flow"></div>
+  <!-- Деталь: Выпущено — по продуктам + линии -->
+  <div id="dash-released"></div>
 
-  <!-- Реакторы -->
-  <div class="dash-card dash-rl-wrap">
-    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--accent2)"></span>Загрузка реакторов</div><span class="dash-badge" id="dash-reactors-badge">—</span></div>
-    <div class="dash-rl-scroll" id="dash-reactor-cards"></div>
-  </div>
+  <!-- Деталь: Варки (адаптив: стадии / за период) -->
+  <div id="dash-varki"></div>
 
-  <!-- Линии розлива -->
-  <div class="dash-card">
-    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--warn)"></span>Линии розлива</div><span class="dash-badge">доля выпуска</span></div>
-    <div class="dash-rl-scroll" id="bi-pouring-lines-list"></div>
-  </div>
+  <!-- Деталь: Загрузка реакторов (танки) -->
+  <div id="dash-reactors"></div>
 
-  <!-- Уровень 3 — Продукты -->
-  <div class="dash-card" id="bi-products-card" style="margin-bottom:0;">
-    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--r4)"></span>Выпуск по продуктам</div><span class="dash-badge">выпущено · по SKU</span></div>
-    <div id="bi-products"></div>
-  </div>
+  <!-- Деталь: Ожидает розлива — задержки -->
+  <div id="dash-waiting"></div>
 
 </div>
 
@@ -4549,6 +4581,150 @@ function renderPulseDay(range) {
     kt('linear-gradient(135deg,#f59e0b,#ea580c)', 'Ожидает розлива', ic.wait, `${tf(awaitingKg)}<small> т</small>`, 'ожидает', `${awaitingB.length} ${pluVar(awaitingB.length)}`);
 }
 
+// Деталь «Выпущено — по продуктам»: кольцо выпуска (шт) по SKU + бары по линиям розлива.
+function renderDashReleased(range) {
+  const el = document.getElementById('dash-released');
+  if (!el) return;
+  range = range || dashRange();
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const pb = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
+  const releasedB = pb.filter(b => b.factQty != null);
+
+  const bySku = {};
+  releasedB.forEach(b => { const k = b.name || b.sku || '—'; (bySku[k] = bySku[k] || { name: k, qty: 0 }).qty += (b.factQty || 0); });
+  let rows = Object.values(bySku).sort((a, b) => b.qty - a.qty);
+  const totQty = rows.reduce((s, r) => s + r.qty, 0);
+  if (rows.length > 5) { const top = rows.slice(0, 5); top.push({ name: 'Прочее', qty: rows.slice(5).reduce((s, r) => s + r.qty, 0) }); rows = top; }
+  const cols = ['#10b981', '#22d3ee', '#a78bfa', '#f59e0b', '#ec4899', '#64748b'];
+  const R = 46, C = 2 * Math.PI * R; let off = 0;
+  const segs = rows.map((r, i) => { const len = totQty ? (r.qty / totQty) * C : 0; const s = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${cols[i % cols.length]}" stroke-width="16" stroke-dasharray="${len.toFixed(1)} ${(C - len).toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"></circle>`; off += len; return s; }).join('');
+  const legend = rows.map((r, i) => { const pc = totQty ? Math.round(r.qty / totQty * 100) : 0; return `<div class="db-leg-i"><span class="db-dot" style="background:${cols[i % cols.length]}"></span><span class="nm" title="${r.name}">${r.name}</span><b>${nf(r.qty)}</b><span class="pc">${pc}%</span></div>`; }).join('');
+
+  const poB = pb.filter(b => b.pouringLine && b.factQty != null);
+  const lrows = (state.pouringLines || []).map(l => { const lb = poB.filter(b => b.pouringLine === l); return { l, qty: lb.reduce((s, b) => s + (b.factQty || 0), 0) }; }).sort((a, b) => b.qty - a.qty);
+  const maxLine = Math.max(1, ...lrows.map(x => x.qty));
+  const linesHtml = lrows.length ? `<div class="db-lines"><div class="db-lines-h">по линиям розлива</div>` + lrows.map(x => `<div class="db-lrow"><span class="nm" title="${x.l}">${x.l}</span><span class="tr"><i style="width:${Math.max(2, Math.round(x.qty / maxLine * 100))}%;background:linear-gradient(90deg,#059669,#34d399)"></i></span><b>${nf(x.qty)}</b></div>`).join('') + `</div>` : '';
+
+  const icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4v2.5l1.2 2.2a3 3 0 0 1 .8 2V19a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V8.7a3 3 0 0 1 .8-2L10 4.5V2z"/><path d="M9 12h6"/></svg>`;
+  const head = `<div class="db-hd"><span class="db-ic">${icon}</span><div><div class="db-tt">Выпущено — по продуктам</div><div class="db-sb">готовая продукция за период</div></div><span class="db-badge">${nf(totQty)} шт</span></div>`;
+  const body = totQty <= 0
+    ? `<div class="db-empty">Нет выпущенной продукции за период</div>`
+    : `<div class="db-bd"><div class="db-donut-wrap"><svg class="db-donut" viewBox="0 0 120 120" width="120" height="120"><g transform="rotate(-90 60 60)">${segs}</g><text x="60" y="56" text-anchor="middle" class="db-dc-v">${nf(totQty)}</text><text x="60" y="73" text-anchor="middle" class="db-dc-k">шт</text></svg><div class="db-leg">${legend}</div></div>${linesHtml}</div>`;
+  el.innerHTML = `<div class="db-card" style="--dbc:#10b981">${head}${body}</div>`;
+}
+
+// Деталь «Варки»: Сегодня → живой конвейер по стадиям; период (7/30/90д) → накопительно (всего/завершено/в работе) + по дням.
+function renderDashVarki(range) {
+  const el = document.getElementById('dash-varki');
+  if (!el) return;
+  range = range || dashRange();
+  const isDay = range.horizon === 'day';
+  const pb = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
+  const icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6l-4.5 8.5A2 2 0 0 0 7.3 21h9.4a2 2 0 0 0 1.8-3.5L14 9V3"/><path d="M8.5 15h7"/></svg>`;
+  let body;
+  if (isDay) {
+    const bk = { q: 0, br: 0, bd: 0, po: 0, dn: 0 };
+    pb.forEach(b => { const st = getBatchStage(b);
+      if (st === 'queued' || st === 'assigned') bk.q++;
+      else if (st === 'brewing') bk.br++;
+      else if (st === 'brewed') bk.bd++;
+      else if (st === 'pouring' || st === 'poured') bk.po++;
+      else if (st === 'finished') bk.dn++; });
+    const tot = pb.length || 1;
+    const cells = [['В очереди', bk.q, '#64748b'], ['Варится', bk.br, '#3b82f6'], ['Сварено', bk.bd, '#8b5cf6'], ['На розливе', bk.po, '#f59e0b'], ['Готово', bk.dn, '#10b981']];
+    const tiles = cells.map(c => `<div class="db-st" style="--sc:${c[2]}"><div class="n">${c[1]}</div><div class="l">${c[0]}</div></div>`).join('');
+    const bar = cells.map(c => `<span style="width:${(c[1] / tot * 100).toFixed(1)}%;background:${c[2]}"></span>`).join('');
+    body = `<div class="db-bd"><div class="db-st-tiles">${tiles}</div><div class="db-stacked">${bar}</div><div class="db-cap">Готово <b>${bk.dn} из ${pb.length}</b> · в работе ${pb.length - bk.dn}</div></div>`;
+  } else {
+    const done = pb.filter(b => b.factQty != null).length;
+    const tot = pb.length, wip = tot - done;
+    const dayMap = {}; pb.forEach(b => { dayMap[b.brewDate] = (dayMap[b.brewDate] || 0) + 1; });
+    const days = []; let d = new Date(range.start); const end = new Date(range.end);
+    while (d <= end) { const iso = fmtDate(d); days.push({ iso, n: dayMap[iso] || 0 }); d = addDays(d, 1); }
+    const maxN = Math.max(1, ...days.map(x => x.n));
+    const daysHtml = days.map(x => `<div class="db-day" title="${fmtDateHuman(x.iso)}: ${x.n}"><div class="db-day-bar" style="height:${x.n ? Math.max(8, Math.round(x.n / maxN * 100)) : 0}%"></div></div>`).join('');
+    const tiles = [['Всего', tot, '#8b5cf6'], ['Завершено', done, '#10b981'], ['В работе', wip, '#f59e0b']].map(c => `<div class="db-st" style="--sc:${c[2]}"><div class="n">${c[1]}</div><div class="l">${c[0]}</div></div>`).join('');
+    body = `<div class="db-bd"><div class="db-st-tiles">${tiles}</div><div class="db-days-h">варок по дням</div><div class="db-days">${daysHtml}</div></div>`;
+  }
+  const head = `<div class="db-hd"><span class="db-ic">${icon}</span><div><div class="db-tt">Варки${isDay ? ' — по стадиям' : ' за период'}</div><div class="db-sb">${isDay ? 'где сейчас каждая варка' : 'итог за период'}</div></div><span class="db-badge">${pb.length} всего</span></div>`;
+  el.innerHTML = `<div class="db-card" style="--dbc:#8b5cf6">${head}${body}</div>`;
+}
+
+// Деталь «Загрузка реакторов»: танки-гейджи, уровень = доля выполненного (выпущено/сварено) по реактору за период.
+function renderDashReactors(range) {
+  const el = document.getElementById('dash-reactors');
+  if (!el) return;
+  range = range || dashRange();
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v14c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>`;
+  if (!state.reactors.length) { el.innerHTML = `<div class="db-card" style="--dbc:#06b6d4"><div class="db-hd"><span class="db-ic">${icon}</span><div><div class="db-tt">Загрузка реакторов</div></div></div><div class="db-empty">Нет реакторов</div></div>`; return; }
+  const brewedStages = new Set(['brewed', 'pouring', 'poured', 'finished']);
+  let working = 0;
+  const tanks = state.reactors.map(r => {
+    const rb = state.batches.filter(b => b.reactor === r && b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
+    const brewedB = rb.filter(b => brewedStages.has(getBatchStage(b)));
+    const releasedB = brewedB.filter(b => b.factQty != null);
+    const brewedKg = brewedB.reduce((s, b) => s + volOf(b), 0);
+    const releasedKg = releasedB.reduce((s, b) => s + volOf(b), 0);
+    const done = brewedKg > 0 ? Math.min(100, Math.round(releasedKg / brewedKg * 100)) : 0;
+    const active = rb.length > 0; if (active) working++;
+    const bySku = {}; rb.forEach(b => { const k = b.name || b.sku || '—'; bySku[k] = (bySku[k] || 0) + 1; });
+    const skus = Object.keys(bySku).sort((a, b) => bySku[b] - bySku[a]);
+    const prod = skus.length ? (skus.length > 1 ? `${skus[0]} +${skus.length - 1}` : skus[0]) : 'простой';
+    return { r, active, done, brewedKg, releasedKg, prod };
+  });
+  const tanksHtml = tanks.map(t => {
+    if (!t.active) return `<div class="dash-tank idle"><div class="dash-tank-cyl"></div><span class="dash-tank-badge" style="background:#64748b">${t.r}</span><div class="dash-tank-done">—</div><div class="dash-tank-s">простой</div></div>`;
+    const h = Math.max(t.done > 0 ? 10 : 3, t.done);
+    return `<div class="dash-tank" title="${t.r}: сварено ${nf(t.brewedKg)} кг · выпущено ${nf(t.releasedKg)} кг"><div class="dash-tank-cyl"><div class="dash-tank-fill" style="height:${h}%;background:linear-gradient(180deg,#67e8f9,#0891b2)"></div></div><span class="dash-tank-badge" style="background:#06b6d4">${t.r}</span><div class="dash-tank-done" style="color:${t.done >= 100 ? 'var(--accent2)' : 'var(--text)'}">${t.done}%</div><div class="dash-tank-s" title="${t.prod}">${t.prod}</div></div>`;
+  }).join('');
+  const head = `<div class="db-hd"><span class="db-ic">${icon}</span><div><div class="db-tt">Загрузка реакторов</div><div class="db-sb">доля выполненного по каждому</div></div><span class="db-badge">${working} / ${state.reactors.length}</span></div>`;
+  el.innerHTML = `<div class="db-card" style="--dbc:#06b6d4">${head}<div class="db-bd"><div class="dash-tanks">${tanksHtml}</div></div></div>`;
+}
+
+// Деталь «Ожидает розлива»: сварено, но не выпущено — что застряло и сколько ждёт (на сейчас).
+function renderDashWaiting(range) {
+  const el = document.getElementById('dash-waiting');
+  if (!el) return;
+  range = range || dashRange();
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const tf = kg => ((kg || 0) / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  const pluVar = n => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? 'варок' : (b === 1 ? 'варка' : (b >= 2 && b <= 4 ? 'варки' : 'варок')); };
+  const brewedStages = new Set(['brewed', 'pouring', 'poured', 'finished']);
+  const pb = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
+  const awaitingB = pb.filter(b => brewedStages.has(getBatchStage(b)) && b.factQty == null);
+  const waitKg = awaitingB.reduce((s, b) => s + volOf(b), 0);
+  const now = new Date();
+  const waitMsOf = b => { const end = b.brewEndedAt ? new Date(b.brewEndedAt) : new Date((b.brewDate || range.end) + 'T23:59:59'); return now - end; };
+  const OVER = 24 * 3600 * 1000;
+  const fmtWait = ms => { if (ms < 0) ms = 0; const h = ms / 3600000; return h < 24 ? Math.max(1, Math.round(h)) + ' ч' : Math.round(h / 24) + ' дн'; };
+  const nameOf = b => (b.name || (recBySku[b.sku] && recBySku[b.sku].name) || b.sku || 'Варка');
+  const delays = awaitingB.map(b => ({ b, ms: waitMsOf(b) })).filter(x => x.ms > 0).sort((a, c) => c.ms - a.ms).slice(0, 6);
+  const icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12M6 21h12M8 3v3.5l4 5.5 4-5.5V3M8 21v-3.5l4-5.5 4 5.5V21"/></svg>`;
+  const head = `<div class="db-hd"><span class="db-ic">${icon}</span><div><div class="db-tt">Ожидает розлива — задержки</div><div class="db-sb">что застряло · на сейчас</div></div><span class="db-badge">${tf(waitKg)} т · ${awaitingB.length} ${pluVar(awaitingB.length)}</span></div>`;
+  let body;
+  if (!awaitingB.length) {
+    body = `<div class="db-bd"><div class="db-ok"><span class="db-ok-dot"></span>Вся сваренная продукция выпущена — задержек нет</div></div>`;
+  } else {
+    const rows = delays.map(x => {
+      const over = x.ms > OVER, col = over ? 'var(--danger)' : 'var(--warn)';
+      const ic = over
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+      return `<div class="db-al${over ? ' over' : ''}"><span class="db-ai" style="background:color-mix(in srgb,${col} 20%,transparent);color:${col}">${ic}</span><div class="db-atx">${nameOf(x.b)}<small>${x.b.reactor ? 'Реактор ' + x.b.reactor : 'без реактора'}</small></div><span class="db-aw" style="color:${col}">${fmtWait(x.ms)}${over ? ' · просрочка' : ''}</span></div>`;
+    }).join('');
+    body = `<div class="db-bd"><div class="db-delays">${rows}</div></div>`;
+  }
+  el.innerHTML = `<div class="db-card" style="--dbc:#f59e0b">${head}${body}</div>`;
+}
+
 // Деталь «Сварено — по продуктам»: объём сваренного за период по продуктам (накопительно).
 function renderDashBrewed(range) {
   const el = document.getElementById('dash-brewed');
@@ -4655,47 +4831,12 @@ function renderBiAnalytics() {
 
   // Уровень 1 «Пульс дня» — по окну горизонта
   renderPulseDay(range);
-  // Деталь «Сварено — по продуктам»
-  try { renderDashBrewed(range); } catch (e) { console.error('renderDashBrewed', e); }
-  // Поток продукции: Сварено = Выпущено + Ожидает + задержки
-  try { renderDashFlow(range); } catch (e) { console.error('renderDashFlow', e); }
-
-  const periodBatches = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted');
-  const doneBatches = periodBatches.filter(b => b.status === 'done');
-  const nf = n => (n||0).toLocaleString('ru-RU');
-
-  // Уровень 2 «Реакторы» — карточки Р-1…Р-N по окну горизонта
-  renderReactorCards(range);
-
-  // ── Линии розлива за период: компактный список (все линии, вкл. простаивающие) ──
-  const linesListEl = document.getElementById('bi-pouring-lines-list');
-  if (linesListEl) {
-    const poBatches = periodBatches.filter(b => b.pouringLine);
-    if (!state.pouringLines.length || !poBatches.length) {
-      linesListEl.innerHTML = `<div class="dash-empty">Нет данных по розливу за период</div>`;
-    } else {
-      const totalLineQty = poBatches.reduce((s,b) => s + (b.factQty||0), 0) || 1;
-      const rows = state.pouringLines.map((l,i) => {
-        const lb = poBatches.filter(b => b.pouringLine === l);
-        const qty = lb.reduce((s,b) => s + (b.factQty||0), 0);
-        return { l, qty, parts: lb.length, share: Math.round(qty / totalLineQty * 100), col: `var(--r${(i%8)+1})` };
-      }).sort((a,b) => b.qty - a.qty);
-      const head = `<div class="dash-ll-row dash-rl-head"><div>Линия</div><div style="text-align:right">Выпуск</div><div style="text-align:right">Партий</div><div style="text-align:right">≈ шт/парт.</div><div>Доля выпуска</div></div>`;
-      linesListEl.innerHTML = head + rows.map(x => {
-        const idle = x.parts === 0;
-        return `<div class="dash-ll-row dash-rl-r${idle ? ' idle' : ''}">
-          <div class="dash-rl-rc"><span class="dash-ll-sq" style="background:${x.col}${idle ? ';opacity:.5' : ''}"></span><span class="dash-rl-name" title="${x.l}">${x.l}</span></div>
-          <div class="dash-rl-out"><b>${nf(x.qty)}</b> <span>шт</span></div>
-          <div class="dash-rl-num">${x.parts}</div>
-          <div class="dash-rl-num">${x.parts ? nf(Math.round(x.qty / x.parts)) : '—'}</div>
-          <div class="dash-rl-load"><span class="dash-rl-bar"><i style="width:${x.share}%; background:${idle ? 'transparent' : x.col};"></i></span><span class="dash-rl-lh">${x.share}%</span></div>
-        </div>`;
-      }).join('');
-    }
-  }
-
-  // ── Уровень 3 «Продукты» — таблица по SKU за период ──
-  renderProducts(doneBatches);
+  // Детальные блоки — в порядке плиток: Сварено → Выпущено → Варки → Реакторы → Ожидает
+  try { renderDashBrewed(range); }   catch (e) { console.error('renderDashBrewed', e); }
+  try { renderDashReleased(range); } catch (e) { console.error('renderDashReleased', e); }
+  try { renderDashVarki(range); }    catch (e) { console.error('renderDashVarki', e); }
+  try { renderDashReactors(range); } catch (e) { console.error('renderDashReactors', e); }
+  try { renderDashWaiting(range); }  catch (e) { console.error('renderDashWaiting', e); }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
