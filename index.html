@@ -1573,26 +1573,6 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
     <div class="dash-rl-scroll" id="dash-reactor-cards"></div>
   </div>
 
-  <!-- Выпуск по дням — недельные плитки (горизонты «День»/«Неделя») -->
-  <div class="dash-card" id="bi-week-card">
-    <div class="dash-card-h">
-      <div class="dash-card-t">Выпуск по дням</div>
-      <span class="dash-badge">текущая неделя</span>
-    </div>
-    <div class="dash-days" id="bi-week-tiles"></div>
-    <div class="dash-week-sum" id="bi-week-sum"></div>
-  </div>
-
-  <!-- Тренд выпуска за месяц (горизонт «Месяц») -->
-  <div class="dash-card" id="bi-month-card" style="display:none;">
-    <div class="dash-card-h">
-      <div class="dash-card-t">Тренд выпуска за месяц</div>
-      <span class="dash-badge" id="bi-month-badge">—</span>
-    </div>
-    <div class="dash-mt" id="bi-month-trend"></div>
-    <div class="dash-week-sum" id="bi-month-sum"></div>
-  </div>
-
   <!-- Линии розлива -->
   <div class="dash-card">
     <div class="dash-card-h"><div class="dash-card-t">Линии розлива</div><span class="dash-badge">доля выпуска</span></div>
@@ -4677,12 +4657,6 @@ function renderBiAnalytics() {
   renderPulseDay(range);
   // Поток продукции: Сварено = Выпущено + Ожидает + задержки
   try { renderDashFlow(range); } catch (e) { console.error('renderDashFlow', e); }
-  // Тренд-блоки по горизонту: День/Неделя → недельные плитки; Месяц → месячный тренд
-  const isMonth = range.horizon === 'month';
-  const weekCard = document.getElementById('bi-week-card');
-  if (weekCard) weekCard.style.display = isMonth ? 'none' : '';
-  if (!isMonth) renderDashWeekTiles();
-  renderMonthTrend(range);
 
   const periodBatches = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted');
   const doneBatches = periodBatches.filter(b => b.status === 'done');
