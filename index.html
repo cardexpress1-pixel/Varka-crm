@@ -1484,6 +1484,24 @@
 #page-dashboard .dash-kt-foot{margin-top:11px;padding-top:10px;border-top:1px solid rgba(255,255,255,.25);font-size:11.5px;opacity:.92;display:flex;align-items:center;justify-content:space-between;gap:6px;}
 #page-dashboard .dash-kt-foot b{font-weight:700;white-space:nowrap;}
 #page-dashboard .dash-kt-foot span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .db-card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:0 14px 34px -22px rgba(0,0,0,.55);overflow:hidden;margin-bottom:14px;}
+#page-dashboard .db-card::before{content:"";position:absolute;top:-50px;left:-30px;width:230px;height:150px;background:radial-gradient(closest-side,var(--dbc),transparent);opacity:.13;pointer-events:none;}
+#page-dashboard .db-hd{display:flex;align-items:center;gap:12px;padding:15px 18px 13px;border-bottom:1px solid var(--border);}
+#page-dashboard .db-ic{width:38px;height:38px;border-radius:11px;background:color-mix(in srgb,var(--dbc) 20%,transparent);color:var(--dbc);display:flex;align-items:center;justify-content:center;flex:none;}
+#page-dashboard .db-ic svg{width:20px;height:20px;}
+#page-dashboard .db-tt{font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--text);}
+#page-dashboard .db-sb{font-size:12px;color:var(--text2);font-weight:500;margin-top:1px;}
+#page-dashboard .db-badge{margin-left:auto;font-size:12px;font-weight:700;color:var(--dbc);background:color-mix(in srgb,var(--dbc) 14%,transparent);padding:5px 12px;border-radius:20px;white-space:nowrap;}
+#page-dashboard .db-bd{padding:14px 18px;}
+#page-dashboard .db-bar{display:grid;grid-template-columns:minmax(0,160px) 1fr 84px;align-items:center;gap:13px;padding:7px 0;font-size:13px;}
+#page-dashboard .db-bar .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);}
+#page-dashboard .db-bar .tr{height:11px;border-radius:6px;background:var(--surface2);overflow:hidden;}
+#page-dashboard .db-bar .tr>i{display:block;height:100%;border-radius:6px;transform-origin:left;animation:dbGrow .8s cubic-bezier(.3,.1,.2,1) both;}
+#page-dashboard .db-bar .vl{text-align:right;font-weight:800;color:var(--text);}
+#page-dashboard .db-empty{padding:20px;text-align:center;color:var(--text2);font-size:13px;}
+@keyframes dbGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media(max-width:560px){#page-dashboard .db-bar{grid-template-columns:minmax(0,110px) 1fr 66px;gap:9px;}}
+@media(prefers-reduced-motion:reduce){#page-dashboard .db-bar .tr>i{animation:none;}}
 /* Реакторы (Уровень 2) — компактный список-таблица */
 #page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:14px 18px;}
 #page-dashboard .dash-rl-scroll{overflow-x:auto;}
@@ -1597,6 +1615,9 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
 
   <!-- Уровень 1 — Пульс дня -->
   <div class="dash-pulse" id="bi-pulse"></div>
+
+  <!-- Деталь: Сварено — по продуктам -->
+  <div id="dash-brewed"></div>
 
   <!-- Поток продукции: Сварено = Выпущено + Ожидает + задержки -->
   <div class="dash-flow" id="dash-flow"></div>
@@ -4528,6 +4549,35 @@ function renderPulseDay(range) {
     kt('linear-gradient(135deg,#f59e0b,#ea580c)', 'Ожидает розлива', ic.wait, `${tf(awaitingKg)}<small> т</small>`, 'ожидает', `${awaitingB.length} ${pluVar(awaitingB.length)}`);
 }
 
+// Деталь «Сварено — по продуктам»: объём сваренного за период по продуктам (накопительно).
+function renderDashBrewed(range) {
+  const el = document.getElementById('dash-brewed');
+  if (!el) return;
+  range = range || dashRange();
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const tf = kg => ((kg || 0) / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  const brewedStages = new Set(['brewed', 'pouring', 'poured', 'finished']);
+  const pb = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
+  const brewedB = pb.filter(b => brewedStages.has(getBatchStage(b)));
+
+  const bySku = {};
+  brewedB.forEach(b => { const k = b.name || b.sku || '—'; (bySku[k] = bySku[k] || { name: k, kg: 0 }).kg += volOf(b); });
+  let rows = Object.values(bySku).sort((a, b) => b.kg - a.kg);
+  const totKg = rows.reduce((s, r) => s + r.kg, 0);
+  if (rows.length > 6) { const top = rows.slice(0, 6); top.push({ name: 'Прочее', kg: rows.slice(6).reduce((s, r) => s + r.kg, 0) }); rows = top; }
+  const maxKg = Math.max(1, ...rows.map(r => r.kg));
+
+  const icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="4.5" rx="6.5" ry="2.3"/><path d="M5.5 4.5v15c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3v-15"/><path d="M4.6 9.5h14.8M4.6 14.5h14.8"/></svg>`;
+  const head = `<div class="db-hd"><span class="db-ic">${icon}</span><div><div class="db-tt">Сварено — по продуктам</div><div class="db-sb">объём наработки за период</div></div><span class="db-badge">${tf(totKg)} т</span></div>`;
+  const body = totKg <= 0
+    ? `<div class="db-empty">Нет сваренной продукции за период</div>`
+    : `<div class="db-bd">` + rows.map(r => `<div class="db-bar"><span class="nm" title="${r.name}">${r.name}</span><span class="tr"><i style="width:${Math.max(2, Math.round(r.kg / maxKg * 100))}%;background:linear-gradient(90deg,#2563eb,#22d3ee)"></i></span><span class="vl">${nf(r.kg)} кг</span></div>`).join('') + `</div>`;
+  el.innerHTML = `<div class="db-card" style="--dbc:#3b82f6">${head}${body}</div>`;
+}
+
 // «Поток продукции» — Сварено = Выпущено (выполнено) + Ожидает розлива (не выполнено) + детектор задержек.
 // Разбивка по ОБЪЁМУ (кг), чтобы доли складывались в 100%. brewedB = сварено; из них с factQty — выпущено, без — ожидает.
 function renderDashFlow(range) {
@@ -4605,6 +4655,8 @@ function renderBiAnalytics() {
 
   // Уровень 1 «Пульс дня» — по окну горизонта
   renderPulseDay(range);
+  // Деталь «Сварено — по продуктам»
+  try { renderDashBrewed(range); } catch (e) { console.error('renderDashBrewed', e); }
   // Поток продукции: Сварено = Выпущено + Ожидает + задержки
   try { renderDashFlow(range); } catch (e) { console.error('renderDashFlow', e); }
 
