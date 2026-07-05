@@ -1408,6 +1408,32 @@
 #page-dashboard .dash-pulse-cell.dp-status{display:flex;flex-direction:column;justify-content:center;}
 @media(max-width:1100px){#page-dashboard .dash-pulse{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:640px){#page-dashboard .dash-pulse{grid-template-columns:repeat(2,1fr);}}
+#page-dashboard .dash-flow{margin-bottom:16px;}
+#page-dashboard .dflow-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+#page-dashboard .dflow-empty{padding:22px;text-align:center;color:var(--text2);font-size:13px;}
+#page-dashboard .dflow-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+#page-dashboard .dflow-lbl{font-size:13px;color:var(--text2);font-weight:600;}
+#page-dashboard .dflow-lbl b{color:var(--text);font-weight:800;font-size:15px;}
+#page-dashboard .dflow-sum{font-size:13px;font-weight:700;color:var(--text2);}
+#page-dashboard .dflow-bar{height:52px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);display:flex;gap:3px;overflow:hidden;}
+#page-dashboard .dseg{height:100%;display:flex;flex-direction:column;justify-content:center;padding:0 16px;min-width:0;transition:width .8s cubic-bezier(.4,0,.2,1);}
+#page-dashboard .dseg b{font-size:17px;font-weight:800;line-height:1;}
+#page-dashboard .dseg span{font-size:11px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#page-dashboard .dseg-out{background:linear-gradient(135deg,#10b981,#34d399);color:#06251b;}
+#page-dashboard .dseg-wait{background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#3a2708;}
+#page-dashboard .dflow-leg{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text2);}
+#page-dashboard .dflow-leg i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle;}
+#page-dashboard .dflow-leg b{color:var(--text);font-weight:700;}
+#page-dashboard .dflow-delays{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+#page-dashboard .dflow-a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);}
+#page-dashboard .dflow-a.over{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border-color:color-mix(in srgb,var(--danger) 32%,var(--border));}
+#page-dashboard .dflow-adot{width:9px;height:9px;border-radius:50%;flex:none;}
+#page-dashboard .dflow-atx{font-size:13px;font-weight:600;min-width:0;}
+#page-dashboard .dflow-atx small{display:block;font-size:11px;color:var(--text2);font-weight:500;margin-top:2px;}
+#page-dashboard .dflow-aw{margin-left:auto;font-size:12px;font-weight:700;white-space:nowrap;}
+#page-dashboard .dflow-ok{display:flex;align-items:center;gap:9px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);font-size:13px;color:var(--text2);font-weight:600;}
+#page-dashboard .dflow-ok i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+@media(prefers-reduced-motion:reduce){#page-dashboard .dseg{transition:none;}}
 /* Реакторы (Уровень 2) — компактный список-таблица */
 #page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:6px 16px;}
 #page-dashboard .dash-rl-scroll{overflow-x:auto;}
@@ -1516,6 +1542,9 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
 
   <!-- Уровень 1 — Пульс дня -->
   <div class="dash-pulse" id="bi-pulse"></div>
+
+  <!-- Поток продукции: Сварено = Выпущено + Ожидает + задержки -->
+  <div class="dash-flow" id="dash-flow"></div>
 
   <!-- Уровень 2 — Реакторы -->
   <div style="display:flex; align-items:center; justify-content:space-between; margin:2px 0 10px;">
@@ -4532,7 +4561,7 @@ function renderPulseDay(range) {
   const brewedStages   = new Set(['brewed', 'pouring', 'poured', 'finished']);
   const awaitingStages = new Set(['brewed', 'pouring', 'poured']);
   const brewedB   = periodBatches.filter(b => brewedStages.has(getBatchStage(b)));
-  const awaitingB = periodBatches.filter(b => awaitingStages.has(getBatchStage(b)));
+  const awaitingB = periodBatches.filter(b => awaitingStages.has(getBatchStage(b)) && b.factQty == null);
   const releasedB = periodBatches.filter(b => b.factQty != null); // розлив закрыт → выпущено
 
   const brewedKg   = brewedB.reduce((s,b) => s + volOf(b), 0);
@@ -4559,6 +4588,76 @@ function renderPulseDay(range) {
   `;
 }
 
+// «Поток продукции» — Сварено = Выпущено (выполнено) + Ожидает розлива (не выполнено) + детектор задержек.
+// Разбивка по ОБЪЁМУ (кг), чтобы доли складывались в 100%. brewedB = сварено; из них с factQty — выпущено, без — ожидает.
+function renderDashFlow(range) {
+  const el = document.getElementById('dash-flow');
+  if (!el) return;
+  range = range || dashRange();
+  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
+  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
+  const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
+  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const tf = kg => ((kg || 0) / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  const pluVar = n => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? 'варок' : (b === 1 ? 'варка' : (b >= 2 && b <= 4 ? 'варки' : 'варок')); };
+
+  const pb = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
+  const brewedStages = new Set(['brewed', 'pouring', 'poured', 'finished']);
+  const brewedB   = pb.filter(b => brewedStages.has(getBatchStage(b)));
+  const releasedB = brewedB.filter(b => b.factQty != null);
+  const awaitingB = brewedB.filter(b => b.factQty == null);
+
+  const outKg  = releasedB.reduce((s,b) => s + volOf(b), 0);
+  const waitKg = awaitingB.reduce((s,b) => s + volOf(b), 0);
+  const totKg  = outKg + waitKg;
+  const outQty = releasedB.reduce((s,b) => s + (b.factQty || 0), 0);
+
+  if (totKg <= 0) { el.innerHTML = `<div class="dflow-card dflow-empty">Нет сваренной продукции за период</div>`; return; }
+  const outPct  = Math.round(outKg / totKg * 100);
+  const waitPct = 100 - outPct;
+
+  const now = new Date();
+  const waitMsOf = b => {
+    const end = b.brewEndedAt ? new Date(b.brewEndedAt) : new Date((b.brewDate || range.end) + 'T23:59:59');
+    return now - end;
+  };
+  const OVERDUE = 24 * 3600 * 1000;
+  const fmtWait = ms => { if (ms < 0) ms = 0; const h = ms / 3600000; return h < 24 ? Math.max(1, Math.round(h)) + ' ч' : Math.round(h / 24) + ' дн'; };
+  const nameOf = b => (b.name || (recBySku[b.sku] && recBySku[b.sku].name) || b.sku || 'Варка');
+  const delays = awaitingB.map(b => ({ b, ms: waitMsOf(b) })).filter(x => x.ms > 0).sort((a,c) => c.ms - a.ms).slice(0, 5);
+
+  const bar = `<div class="dflow-bar">
+    ${outPct  > 0 ? `<div class="dseg dseg-out" style="width:${outPct}%"><b>${tf(outKg)} т</b><span>Выпущено · ${outPct}%</span></div>` : ''}
+    ${waitPct > 0 ? `<div class="dseg dseg-wait" style="width:${waitPct}%"><b>${tf(waitKg)} т</b><span>Ожидает · ${waitPct}%</span></div>` : ''}
+  </div>`;
+
+  const legend = `<div class="dflow-leg">
+    <span><i style="background:#10b981"></i>Выполнено — розлив закрыт: <b>${tf(outKg)} т</b> · ${nf(outQty)} шт</span>
+    <span><i style="background:#f59e0b"></i>Не выполнено — ожидает розлива: <b>${tf(waitKg)} т</b> · ${awaitingB.length} ${pluVar(awaitingB.length)}</span>
+  </div>`;
+
+  let tail = '';
+  if (delays.length) {
+    tail = `<div class="dflow-delays">` + delays.map(x => {
+      const over = x.ms > OVERDUE, col = over ? 'var(--danger)' : 'var(--warn)';
+      return `<div class="dflow-a${over ? ' over' : ''}">
+        <span class="dflow-adot" style="background:${col}"></span>
+        <span class="dflow-atx">${nameOf(x.b)}<small>Ожидает розлива${x.b.reactor ? ' · ' + x.b.reactor : ''}</small></span>
+        <span class="dflow-aw" style="color:${col}">${fmtWait(x.ms)}${over ? ' · просрочка' : ''}</span>
+      </div>`;
+    }).join('') + `</div>`;
+  } else if (waitKg <= 0) {
+    tail = `<div class="dflow-ok"><i style="background:var(--accent2)"></i>Вся сваренная продукция выпущена — задержек нет</div>`;
+  }
+
+  el.innerHTML = `<div class="dflow-card">
+    <div class="dflow-h">
+      <div class="dflow-lbl">Поток продукции · <b>${tf(totKg)} т сварено</b></div>
+      <div class="dflow-sum"><span style="color:#34d399">${outPct}%</span> выполнено · <span style="color:#fbbf24">${waitPct}%</span> ждёт</div>
+    </div>${bar}${legend}${tail}
+  </div>`;
+}
+
 function renderBiAnalytics() {
   const pulseEl = document.getElementById('bi-pulse');
   if (!pulseEl) return;
@@ -4568,6 +4667,8 @@ function renderBiAnalytics() {
 
   // Уровень 1 «Пульс дня» — по окну горизонта
   renderPulseDay(range);
+  // Поток продукции: Сварено = Выпущено + Ожидает + задержки
+  try { renderDashFlow(range); } catch (e) { console.error('renderDashFlow', e); }
   // Тренд-блоки по горизонту: День/Неделя → недельные плитки; Месяц → месячный тренд
   const isMonth = range.horizon === 'month';
   const weekCard = document.getElementById('bi-week-card');
