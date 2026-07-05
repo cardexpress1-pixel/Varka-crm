@@ -1386,8 +1386,9 @@
 <!-- ═══════════════ PAGE: DASHBOARD ═══════════════ -->
 <style id="dash-redesign-css">
 #page-dashboard .dash-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px;}
-#page-dashboard .dash-card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:8px;flex-wrap:wrap;}
-#page-dashboard .dash-card-t{font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--text);}
+#page-dashboard .dash-card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap;}
+#page-dashboard .dash-card-t{font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--text);display:flex;align-items:center;}
+#page-dashboard .dash-h-bar{display:inline-block;width:4px;height:15px;border-radius:3px;margin-right:9px;flex:none;}
 #page-dashboard .dash-badge{font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-weight:600;white-space:nowrap;}
 /* KPI */
 #page-dashboard #bi-summary-grid{margin-bottom:16px;}
@@ -1463,7 +1464,7 @@
 #page-dashboard .dash-kt-foot b{font-weight:700;white-space:nowrap;}
 #page-dashboard .dash-kt-foot span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* Реакторы (Уровень 2) — компактный список-таблица */
-#page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:6px 16px;}
+#page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:14px 18px;}
 #page-dashboard .dash-rl-scroll{overflow-x:auto;}
 #page-dashboard .dash-rl-row{display:grid;grid-template-columns:118px 118px minmax(0,1fr) 54px 132px 130px;align-items:center;gap:12px;min-width:620px;}
 #page-dashboard .dash-rl-head{padding:6px 0 10px;border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);}
@@ -1574,24 +1575,21 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
   <!-- Поток продукции: Сварено = Выпущено + Ожидает + задержки -->
   <div class="dash-flow" id="dash-flow"></div>
 
-  <!-- Уровень 2 — Реакторы -->
-  <div style="display:flex; align-items:center; justify-content:space-between; margin:2px 0 10px;">
-    <div style="font-size:15px; font-weight:700;">Реакторы</div>
-    <span class="dash-badge" id="dash-reactors-badge">—</span>
-  </div>
+  <!-- Реакторы -->
   <div class="dash-card dash-rl-wrap">
+    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--accent2)"></span>Реакторы</div><span class="dash-badge" id="dash-reactors-badge">—</span></div>
     <div class="dash-rl-scroll" id="dash-reactor-cards"></div>
   </div>
 
   <!-- Линии розлива -->
   <div class="dash-card">
-    <div class="dash-card-h"><div class="dash-card-t">Линии розлива</div><span class="dash-badge">доля выпуска</span></div>
+    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--warn)"></span>Линии розлива</div><span class="dash-badge">доля выпуска</span></div>
     <div class="dash-rl-scroll" id="bi-pouring-lines-list"></div>
   </div>
 
   <!-- Уровень 3 — Продукты -->
   <div class="dash-card" id="bi-products-card" style="margin-bottom:0;">
-    <div class="dash-card-h"><div class="dash-card-t">Продукты</div><span class="dash-badge">за период · по SKU</span></div>
+    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--r4)"></span>Продукты</div><span class="dash-badge">выпущено · по SKU</span></div>
     <div id="bi-products"></div>
   </div>
 
@@ -4371,22 +4369,10 @@ function renderProducts(doneBatches) {
 
   const totKg = rows.reduce((s, r) => s + r.kg, 0);
   const totQty = rows.reduce((s, r) => s + r.qty, 0);
-  const totCount = rows.reduce((s, r) => s + r.count, 0);
-  const rIdx = r => { const i = state.reactors.indexOf(r); return i === -1 ? 999 : i; };
-
-  const body = rows.map((r, i) => {
-    const share = totKg ? (r.kg / totKg * 100) : 0;
-    const shareStr = share >= 9.95 ? Math.round(share) : share.toFixed(1);
-    const tags = [...r.reactors].sort((a, b) => rIdx(a) - rIdx(b))
-      .map(rn => `<span class="dash-prod-rtag" style="background:var(--r${reactorColor(rn)})">${rn}</span>`).join('');
-    return `<tr>
+  const body = rows.map((r, i) => `<tr>
       <td><div class="dash-prod-name"><span class="dash-prod-swatch" style="background:var(--r${(i % 8) + 1})"></span>${r.name}</div>${r.sku ? `<div class="dash-prod-sku">${r.sku}</div>` : ''}</td>
-      <td class="num">${r.count}</td>
       <td class="num"><span class="dash-prod-kg">${nf(r.kg)}</span> <span class="dash-prod-pcs">кг · ${nf(r.qty)} шт</span></td>
-      <td class="num"><span class="dash-prod-share"><span class="dash-prod-sbar"><i style="width:${Math.min(100, share)}%"></i></span><span class="dash-prod-sval">${shareStr}%</span></span></td>
-      <td><div class="dash-prod-reactors">${tags || '<span class="dash-prod-sku">—</span>'}</div></td>
-    </tr>`;
-  }).join('');
+    </tr>`).join('');
 
   const RR = 47, CC = 2 * Math.PI * RR;
   let ringOff = 0;
@@ -4405,14 +4391,11 @@ function renderProducts(doneBatches) {
   </div>`;
 
   const table = `<table class="dash-prod-tbl">
-    <thead><tr><th>Продукт</th><th class="num">Варок</th><th class="num">Выпущено</th><th class="num">% от итога</th><th>Реакторы</th></tr></thead>
+    <thead><tr><th>Продукт</th><th class="num">Выпущено</th></tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr>
       <td>ИТОГО</td>
-      <td class="num">${totCount}</td>
       <td class="num"><span class="dash-prod-kg">${nf(totKg)}</span> <span class="dash-prod-pcs">кг · ${nf(totQty)} шт</span></td>
-      <td class="num">100%</td>
-      <td>—</td>
     </tr></tfoot>
   </table>`;
 
@@ -4544,10 +4527,8 @@ function renderDashFlow(range) {
   }
 
   el.innerHTML = `<div class="dflow-card">
-    <div class="dflow-h">
-      <div class="dflow-lbl">Поток продукции · <b>${tf(totKg)} т сварено</b></div>
-      <div class="dflow-sum"><span style="color:#34d399">${outPct}%</span> выполнено · <span style="color:#fbbf24">${waitPct}%</span> ждёт</div>
-    </div>${bar}${legend}${tail}
+    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--accent)"></span>Поток продукции</div><span class="dash-badge">${tf(totKg)} т сварено</span></div>
+    ${bar}${legend}${tail}
   </div>`;
 }
 
