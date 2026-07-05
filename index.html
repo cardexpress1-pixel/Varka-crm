@@ -1396,7 +1396,7 @@
 #page-dashboard .dash-trigger svg{width:16px;height:16px;color:var(--accent);flex-shrink:0;}
 #page-dashboard .dash-chev{color:var(--text2);font-size:11px;transition:transform .2s;}
 #page-dashboard .dash-datepick.open .dash-chev{transform:rotate(180deg);}
-#page-dashboard .dash-pop{position:absolute;top:48px;left:46px;width:430px;max-width:88vw;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 20px 50px -18px rgba(0,0,0,.5);z-index:50;}
+#page-dashboard .dash-pop{position:absolute;top:48px;right:0;left:auto;width:430px;max-width:88vw;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 20px 50px -18px rgba(0,0,0,.5);z-index:50;}
 #page-dashboard .dash-pop.hidden{display:none;}
 #page-dashboard .dash-presets{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 #page-dashboard .dash-preset{padding:12px 15px;border-radius:11px;background:var(--surface2);border:1.5px solid transparent;font-size:14px;font-weight:600;color:var(--text);cursor:pointer;text-align:left;transition:.12s;}
@@ -1567,10 +1567,9 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
 </style>
 <div class="page page-wide" id="page-dashboard">
 
-  <div style="font-size:18px; font-weight:800; margin-bottom:14px;" id="page-title-dashboard">Дашборд</div>
-
-  <!-- Шапка дашборда -->
-  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+  <!-- Шапка дашборда: заголовок слева, пикер периода справа -->
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+    <div style="font-size:18px; font-weight:800;" id="page-title-dashboard">Дашборд</div>
     <div class="dash-datepick" id="dash-datepick">
       <button class="dash-navbtn" onclick="dashShiftDay(-1)" title="Предыдущий период">‹</button>
       <button class="dash-trigger" id="dash-trigger" onclick="dashTogglePicker(event)">
