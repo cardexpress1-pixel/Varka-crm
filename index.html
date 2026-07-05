@@ -1389,6 +1389,27 @@
 #page-dashboard .dash-card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap;}
 #page-dashboard .dash-card-t{font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--text);display:flex;align-items:center;}
 #page-dashboard .dash-h-bar{display:inline-block;width:4px;height:15px;border-radius:3px;margin-right:9px;flex:none;}
+#page-dashboard .dash-datepick{position:relative;display:inline-flex;align-items:center;gap:8px;}
+#page-dashboard .dash-navbtn{width:38px;height:40px;border-radius:11px;background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;}
+#page-dashboard .dash-navbtn:hover{background:var(--surface2);color:var(--text);}
+#page-dashboard .dash-trigger{display:inline-flex;align-items:center;gap:9px;height:40px;padding:0 15px;background:var(--surface);border:1.5px solid var(--accent);border-radius:11px;font-size:14px;font-weight:700;color:var(--text);cursor:pointer;}
+#page-dashboard .dash-trigger svg{width:16px;height:16px;color:var(--accent);flex-shrink:0;}
+#page-dashboard .dash-chev{color:var(--text2);font-size:11px;transition:transform .2s;}
+#page-dashboard .dash-datepick.open .dash-chev{transform:rotate(180deg);}
+#page-dashboard .dash-pop{position:absolute;top:48px;left:46px;width:430px;max-width:88vw;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 20px 50px -18px rgba(0,0,0,.5);z-index:50;}
+#page-dashboard .dash-pop.hidden{display:none;}
+#page-dashboard .dash-presets{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+#page-dashboard .dash-preset{padding:12px 15px;border-radius:11px;background:var(--surface2);border:1.5px solid transparent;font-size:14px;font-weight:600;color:var(--text);cursor:pointer;text-align:left;transition:.12s;}
+#page-dashboard .dash-preset:hover{background:var(--surface3);}
+#page-dashboard .dash-preset.on{background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:var(--accent);color:var(--accent);font-weight:700;}
+#page-dashboard .dash-pop-sep{height:1px;background:var(--border);margin:14px 0;}
+#page-dashboard .dash-range{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+#page-dashboard .dash-fld{display:flex;flex-direction:column;gap:5px;}
+#page-dashboard .dash-fld label{font-size:12px;font-weight:600;color:var(--text2);}
+#page-dashboard .dash-fld input{height:40px;padding:0 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:14px;font-weight:600;}
+#page-dashboard .dash-fld input:focus{outline:none;border-color:var(--accent);}
+#page-dashboard .dash-apply{margin-left:auto;height:40px;padding:0 20px;border:0;border-radius:10px;background:var(--accent);color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer;}
+#page-dashboard .dash-apply:hover{filter:brightness(1.08);}
 #page-dashboard .dash-badge{font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-weight:600;white-space:nowrap;}
 /* KPI */
 #page-dashboard #bi-summary-grid{margin-bottom:16px;}
@@ -1550,22 +1571,28 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
 
   <!-- Шапка дашборда -->
   <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
-    <div style="display:flex; align-items:center; gap:6px;">
-      <button class="cal-nav-btn" onclick="dashShiftDay(-1)">‹</button>
-      <button class="cal-nav-btn" onclick="dashShiftDay(1)">›</button>
-      <div onclick="dashOpenDatePicker()" style="display:inline-flex; align-items:center; gap:7px; padding:0 14px; height:34px; background:var(--surface2); border:1.5px solid var(--text3); border-radius:10px; font-size:13px; font-weight:600; color:var(--text); cursor:pointer; position:relative; box-sizing:border-box; user-select:none;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text2);flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <span id="dash-date-human">—</span>
-        <input type="date" id="dash-date-picker" onchange="dashGoToDate(this.value)" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" tabindex="-1" />
-      </div>
-      <button class="btn btn-primary btn-sm" id="dash-today-btn" onclick="dashGoToday()" style="height:34px; border-radius:10px; display:inline-flex; align-items:center; gap:6px; padding:0 14px; font-size:13px;">
-        <span style="width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block;flex-shrink:0;"></span>Сегодня
+    <div class="dash-datepick" id="dash-datepick">
+      <button class="dash-navbtn" onclick="dashShiftDay(-1)" title="Предыдущий период">‹</button>
+      <button class="dash-trigger" id="dash-trigger" onclick="dashTogglePicker(event)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span id="dash-range-label">—</span>
+        <span class="dash-chev">▾</span>
       </button>
-    </div>
-    <div style="display:flex; align-items:center; gap:6px;" id="dash-horizon-switch">
-      <button class="filter-btn active" data-horizon="day" onclick="setDashHorizon('day',this)">День</button>
-      <button class="filter-btn" data-horizon="week" onclick="setDashHorizon('week',this)">Неделя</button>
-      <button class="filter-btn" data-horizon="month" onclick="setDashHorizon('month',this)">Месяц</button>
+      <button class="dash-navbtn" onclick="dashShiftDay(1)" title="Следующий период">›</button>
+      <div class="dash-pop hidden" id="dash-pop">
+        <div class="dash-presets">
+          <button class="dash-preset" data-p="today" onclick="setDashPreset('today')">Сегодня</button>
+          <button class="dash-preset" data-p="7d" onclick="setDashPreset('7d')">7 дней</button>
+          <button class="dash-preset" data-p="30d" onclick="setDashPreset('30d')">30 дней</button>
+          <button class="dash-preset" data-p="90d" onclick="setDashPreset('90d')">90 дней</button>
+        </div>
+        <div class="dash-pop-sep"></div>
+        <div class="dash-range">
+          <div class="dash-fld"><label>С</label><input type="date" id="dash-cust-from"></div>
+          <div class="dash-fld"><label>По</label><input type="date" id="dash-cust-to"></div>
+          <button class="dash-apply" onclick="dashApplyCustom()">Применить</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2612,7 +2639,9 @@ function applyStateMigrations() {
   // пользователь явно переключил её вручную (themeUserSet). Иначе — принудительно светлая,
   // в т.ч. для старых сохранённых состояний без этого флага.
   if (!state.themeUserSet) state.theme = 'light';
-  state.dashHorizon = state.dashHorizon || 'day'; // горизонт дашборда: 'day'|'week'|'month'
+  state.dashHorizon = state.dashHorizon || 'day'; // (устар.) горизонт дашборда
+  state.dashPreset = state.dashPreset || 'today';  // пикер периода: 'today'|'7d'|'30d'|'90d'|'custom'
+  if (state.dashPreset !== 'custom') state.dashDate = fmtDate(new Date()); // относит. пресеты — от сегодня
   state.dashWeekOffset = 0; // недельные плитки дашборда всегда стартуют с текущей недели
   if (!state.stockLevels) state.stockLevels = {};
   if (!state.wpClients || !state.wpClients.length) state.wpClients = [...state.clients];
@@ -3805,34 +3834,71 @@ function dashOpenDatePicker() { openDatePickerFor('dash-date-picker'); }
 const DASH_MON_NOM = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DASH_MON_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const DASH_MON_SHORT = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+// Пикер периода: пресет (сегодня/7д/30д/90д) или произвольный диапазон. Якорь state.dashDate = конец окна.
+const DASH_PRESET_LEN = { today: 1, '7d': 7, '30d': 30, '90d': 90 };
 function dashRange() {
-  const horizon = state.dashHorizon || 'day';
-  const anchor = state.dashDate || fmtDate(new Date());
-  const d = new Date(anchor);
-  if (horizon === 'week') {
-    const start = getMondayOf(d);
-    const end = fmtDate(addDays(new Date(start), 6));
-    const a = new Date(start), b = new Date(end);
-    const label = a.getDate() + ' ' + DASH_MON_SHORT[a.getMonth()] + ' – ' + b.getDate() + ' ' + DASH_MON_SHORT[b.getMonth()] + ' ' + b.getFullYear();
-    return { start, end, horizon, label };
-  }
-  if (horizon === 'month') {
-    const y = d.getFullYear(), m = d.getMonth();
-    const start = fmtDate(new Date(y, m, 1));
-    const end = fmtDate(new Date(y, m + 1, 0));
-    return { start, end, horizon, label: DASH_MON_NOM[m] + ' ' + y };
-  }
-  return { start: anchor, end: anchor, horizon: 'day', label: d.getDate() + ' ' + DASH_MON_GEN[d.getMonth()] + ' ' + d.getFullYear() };
+  const today = fmtDate(new Date());
+  const preset = state.dashPreset || 'today';
+  const end = state.dashDate || today;
+  let start;
+  if (preset === 'custom') start = state.dashStart || end;
+  else start = fmtDate(addDays(new Date(end), -((DASH_PRESET_LEN[preset] || 1) - 1)));
+  const horizon = (start === end) ? 'day' : 'range';
+  const a = new Date(start), b = new Date(end);
+  let label;
+  if (preset === 'today' && end === today) label = 'Сегодня';
+  else if (start === end) label = b.getDate() + ' ' + DASH_MON_SHORT[b.getMonth()] + ' ' + b.getFullYear();
+  else label = a.getDate() + ' ' + DASH_MON_SHORT[a.getMonth()] + ' – ' + b.getDate() + ' ' + DASH_MON_SHORT[b.getMonth()] + ' ' + b.getFullYear();
+  return { start, end, horizon, label };
 }
 
 function dashShiftDay(delta) {
-  const h = state.dashHorizon || 'day';
-  const d = new Date(state.dashDate);
-  if (h === 'week') d.setDate(d.getDate() + delta * 7);
-  else if (h === 'month') d.setMonth(d.getMonth() + delta);
-  else d.setDate(d.getDate() + delta);
-  state.dashDate = fmtDate(d);
+  const r = dashRange();
+  const len = Math.round((new Date(r.end) - new Date(r.start)) / 86400000) + 1;
+  const sh = delta * len;
+  state.dashDate = fmtDate(addDays(new Date(r.end), sh));
+  if ((state.dashPreset || 'today') === 'custom') state.dashStart = fmtDate(addDays(new Date(r.start), sh));
   saveState();
+  renderDashboard();
+}
+
+function dashClosePicker() {
+  const pop = document.getElementById('dash-pop'), dp = document.getElementById('dash-datepick');
+  if (pop) pop.classList.add('hidden');
+  if (dp) dp.classList.remove('open');
+}
+function dashTogglePicker(e) {
+  if (e) e.stopPropagation();
+  const pop = document.getElementById('dash-pop'), dp = document.getElementById('dash-datepick');
+  if (!pop) return;
+  const willOpen = pop.classList.contains('hidden');
+  pop.classList.toggle('hidden', !willOpen);
+  if (dp) dp.classList.toggle('open', willOpen);
+  if (willOpen) setTimeout(function () {
+    document.addEventListener('click', function h(ev) {
+      if (dp && dp.contains(ev.target)) return;
+      dashClosePicker();
+      document.removeEventListener('click', h);
+    });
+  }, 0);
+}
+function setDashPreset(p) {
+  state.dashPreset = p;
+  state.dashDate = fmtDate(new Date()); // пресеты — относительно сегодня
+  saveState();
+  dashClosePicker();
+  renderDashboard();
+}
+function dashApplyCustom() {
+  const cf = document.getElementById('dash-cust-from'), ct = document.getElementById('dash-cust-to');
+  if (!cf || !ct || !cf.value || !ct.value) return;
+  let s = cf.value, e = ct.value;
+  if (s > e) { const t = s; s = e; e = t; }
+  state.dashPreset = 'custom';
+  state.dashStart = s;
+  state.dashDate = e;
+  saveState();
+  dashClosePicker();
   renderDashboard();
 }
 function dashGoToDate(iso) {
@@ -4220,17 +4286,14 @@ function renderDashboard() {
   const viewDate = state.dashDate || today;
   const isToday = viewDate === today;
 
-  const picker = document.getElementById('dash-date-picker');
-  if (picker) picker.value = viewDate;
   const range = dashRange();
-  const humanEl = document.getElementById('dash-date-human');
-  if (humanEl) humanEl.textContent = range.label;
-  document.querySelectorAll('#dash-horizon-switch .filter-btn').forEach(b => b.classList.toggle('active', b.dataset.horizon === range.horizon));
-  const todayBtn = document.getElementById('dash-today-btn');
-  if (todayBtn) {
-    if (isToday) { todayBtn.classList.remove('btn-ghost'); todayBtn.classList.add('btn-primary'); }
-    else { todayBtn.classList.remove('btn-primary'); todayBtn.classList.add('btn-ghost'); }
-  }
+  const rangeLbl = document.getElementById('dash-range-label');
+  if (rangeLbl) rangeLbl.textContent = range.label;
+  const dpPreset = state.dashPreset || 'today';
+  document.querySelectorAll('#page-dashboard .dash-preset').forEach(b => b.classList.toggle('on', b.dataset.p === dpPreset));
+  const cf = document.getElementById('dash-cust-from'), ct = document.getElementById('dash-cust-to');
+  if (cf) cf.value = range.start;
+  if (ct) ct.value = range.end;
   const rdLabel = document.getElementById('dash-reactor-date-label');
   if (rdLabel) rdLabel.textContent = fmtDateHuman(viewDate);
   const totalLbl = document.getElementById('s-total-lbl');
