@@ -1452,6 +1452,16 @@
 @media(max-width:640px){#page-dashboard .dash-prod-wrap{flex-direction:column;align-items:stretch;}}
 @media(prefers-reduced-motion:reduce){#page-dashboard .dash-tank-fill{transition:none;}}
 #page-dashboard .dash-prod-swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:middle;}
+#page-dashboard .dash-kt{border-radius:20px;padding:16px 17px;color:#fff;position:relative;overflow:hidden;box-shadow:0 14px 34px -18px rgba(0,0,0,.55);min-width:0;}
+#page-dashboard .dash-kt-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:13px;}
+#page-dashboard .dash-kt-lbl{font-size:12px;font-weight:600;letter-spacing:.02em;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#page-dashboard .dash-kt-ic{width:34px;height:34px;border-radius:12px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;flex:none;}
+#page-dashboard .dash-kt-ic svg{width:19px;height:19px;}
+#page-dashboard .dash-kt-val{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1;}
+#page-dashboard .dash-kt-val small{font-size:13px;font-weight:600;opacity:.85;}
+#page-dashboard .dash-kt-foot{margin-top:11px;padding-top:10px;border-top:1px solid rgba(255,255,255,.25);font-size:11.5px;opacity:.92;display:flex;align-items:center;justify-content:space-between;gap:6px;}
+#page-dashboard .dash-kt-foot b{font-weight:700;white-space:nowrap;}
+#page-dashboard .dash-kt-foot span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* Реакторы (Уровень 2) — компактный список-таблица */
 #page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:6px 16px;}
 #page-dashboard .dash-rl-scroll{overflow-x:auto;}
@@ -4447,18 +4457,28 @@ function renderPulseDay(range) {
     ? new Set(periodBatches.filter(b => { const st = getBatchStage(b); return st === 'brewing' || st === 'pouring'; }).map(b => b.reactor)).size
     : new Set(periodBatches.map(b => b.reactor).filter(Boolean)).size;
 
-  const tU   = '<span style="font-size:13px;color:var(--text3);font-weight:600"> т</span>';
-  const pcsU = '<span style="font-size:14px;color:var(--text3);font-weight:600"> шт</span>';
   const reactSub = isToday ? 'варят / разливают' : 'задействовано';
   const pluVar = n => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? 'варок' : (b === 1 ? 'варка' : (b >= 2 && b <= 4 ? 'варки' : 'варок')); };
+  const SW = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+  const ic = {
+    brew: `<svg viewBox="0 0 24 24" ${SW}><ellipse cx="12" cy="4.5" rx="6.5" ry="2.3"/><path d="M5.5 4.5v15c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3v-15"/><path d="M4.6 9.5h14.8M4.6 14.5h14.8"/></svg>`,
+    out:  `<svg viewBox="0 0 24 24" ${SW}><path d="M10 2h4v2.5l1.2 2.2a3 3 0 0 1 .8 2V19a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V8.7a3 3 0 0 1 .8-2L10 4.5V2z"/><path d="M9 12h6"/></svg>`,
+    vark: `<svg viewBox="0 0 24 24" ${SW}><path d="M9 3h6"/><path d="M10 3v6l-4.5 8.5A2 2 0 0 0 7.3 21h9.4a2 2 0 0 0 1.8-3.5L14 9V3"/><path d="M8.5 15h7"/></svg>`,
+    reac: `<svg viewBox="0 0 24 24" ${SW}><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v14c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>`,
+    wait: `<svg viewBox="0 0 24 24" ${SW}><path d="M6 3h12M6 21h12M8 3v3.5l4 5.5 4-5.5V3M8 21v-3.5l4-5.5 4 5.5V21"/></svg>`
+  };
+  const kt = (grad, lbl, icon, val, footL, footR) => `<div class="dash-kt" style="background:${grad}">
+    <div class="dash-kt-top"><span class="dash-kt-lbl">${lbl}</span><span class="dash-kt-ic">${icon}</span></div>
+    <div class="dash-kt-val">${val}</div>
+    <div class="dash-kt-foot"><span>${footL}</span><b>${footR}</b></div>
+  </div>`;
 
-  el.innerHTML = `
-    <div class="dash-pulse-cell"><div class="dp-lbl">Сварено</div><div class="dp-val">${tf(brewedKg)}${tU}</div><div class="dp-sub">${nf(brewedKg)} кг</div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">Выпущено</div><div class="dp-val">${nf(releasedQty)}${pcsU}</div><div class="dp-sub">${nf(releasedKg)} кг</div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">Варок</div><div class="dp-val">${totalCount}</div><div class="dp-sub">${releasedB.length} с закрытым розливом</div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">Реакторов</div><div class="dp-val">${liveReactors}<span style="font-size:14px;color:var(--text3);font-weight:600"> / ${state.reactors.length}</span></div><div class="dp-sub">${reactSub}</div></div>
-    <div class="dash-pulse-cell"><div class="dp-lbl">Ожидает розлива</div><div class="dp-val">${tf(awaitingKg)}${tU}</div><div class="dp-sub">${awaitingB.length} ${pluVar(awaitingB.length)}</div></div>
-  `;
+  el.innerHTML =
+    kt('linear-gradient(135deg,#3b82f6,#1d4ed8)', 'Сварено', ic.brew, `${tf(brewedKg)}<small> т</small>`, 'за период', `${nf(brewedKg)} кг`) +
+    kt('linear-gradient(135deg,#10b981,#047857)', 'Выпущено', ic.out, `${nf(releasedQty)}<small> шт</small>`, 'розлив закрыт', `${nf(releasedKg)} кг`) +
+    kt('linear-gradient(135deg,#8b5cf6,#6d28d9)', 'Варок', ic.vark, `${totalCount}`, 'за период', `${releasedB.length} с розливом`) +
+    kt('linear-gradient(135deg,#06b6d4,#0e7490)', 'Реакторов', ic.reac, `${liveReactors}<small> / ${state.reactors.length}</small>`, reactSub, `${state.reactors.length} всего`) +
+    kt('linear-gradient(135deg,#f59e0b,#ea580c)', 'Ожидает розлива', ic.wait, `${tf(awaitingKg)}<small> т</small>`, 'не выполнено', `${awaitingB.length} ${pluVar(awaitingB.length)}`);
 }
 
 // «Поток продукции» — Сварено = Выпущено (выполнено) + Ожидает розлива (не выполнено) + детектор задержек.
