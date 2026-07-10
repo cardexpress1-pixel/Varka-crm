@@ -198,6 +198,8 @@
   .btn-ghost:hover { background: var(--surface3); border-color: var(--text2); }
   .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 8px; }
   .btn-danger { background: var(--danger); color: #fff; }
+  .btn-outline-danger { background: transparent; color: var(--danger); border: 1.5px solid var(--danger); }
+  .btn-outline-danger:hover { background: rgba(239,68,68,.08); }
   .btn-purple { background: var(--purple); color: #fff; }
   .btn-full { width: 100%; justify-content: center; font-size: 15px; padding: 12px; }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -552,6 +554,8 @@
   .ing-fact-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   .ing-fact-input[type=number] { -moz-appearance: textfield; }
   .ing-fact-input.filled { border-color: var(--accent2); }
+  .ing-fact-input:not(.filled) { border-color: var(--danger); }
+  .ingredient-row.ing-row-missing { border-left: 3px solid var(--danger); background: rgba(239,68,68,.06); padding-left: 8px; }
   /* вспомогательные (не brewop) */
   .reactor-card.brewop-selected { box-shadow: 0 0 0 2.5px var(--accent); }
   #brewop-free-panel { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 18px 16px; text-align: center; margin-bottom: 8px; }
@@ -6264,7 +6268,7 @@ function renderIntake() {
     } else {
       const durationStr = formatDuration(new Date(b.pouringEndedAt) - new Date(b.pouringStartedAt));
       actionHtml = `<div style="display:flex; align-items:center; gap:8px;">
-        <input type="number" id="intake-qty-${b.id}" placeholder="${b.planQty}" style="width:100px; font-size:16px; font-weight:700; text-align:center;" />
+        <input type="number" id="intake-qty-${b.id}" class="ing-fact-input" oninput="reflectIntakeQtyState(this)" placeholder="${b.planQty}" style="width:100px; font-size:16px; font-weight:700; text-align:center;" />
         <button class="btn btn-success btn-sm" onclick="saveIntakeQty('${b.id}')">Принять</button>
       </div>`;
     }
@@ -6416,7 +6420,7 @@ function renderPouringDetail(b) {
     const durationStr = formatDuration(new Date(b.pouringEndedAt) - new Date(b.pouringStartedAt));
     actionHtml = `<div style="font-size:13px; color:var(--text2); text-align:center; margin-bottom:10px;">Розлив занял ${durationStr} · введите фактический выход (шт)</div>
       <div style="display:flex; gap:8px;">
-        <input type="number" id="intake-qty-${b.id}" class="ing-fact-input" placeholder="${b.planQty}" style="flex:1; font-size:20px; padding:12px;">
+        <input type="number" id="intake-qty-${b.id}" class="ing-fact-input" oninput="reflectIntakeQtyState(this)" placeholder="${b.planQty}" style="flex:1; font-size:20px; padding:12px;">
         <button class="btn btn-success" onclick="saveIntakeQty('${b.id}')" style="flex-shrink:0; padding:0 20px;">Принять</button>
       </div>`;
   }
@@ -6486,6 +6490,15 @@ function stopPouring(batchId) {
       showToast(`Розлив ${batchId} завершён · введите количество`);
     }
   });
+}
+
+// Живая подсветка поля количества — та же логика, что у сырья на участке варки:
+// пустое/некорректное значение — красная рамка (класс ing-fact-input:not(.filled)
+// уже задаёт это в CSS), валидное число — зелёная, ещё до нажатия «Принять».
+// saveIntakeQty() как и раньше не даст сохранить пустое/нулевое значение.
+function reflectIntakeQtyState(input) {
+  const qty = parseInt(input.value);
+  input.classList.toggle('filled', !!qty && qty > 0);
 }
 
 function saveIntakeQty(batchId) {
@@ -8103,8 +8116,10 @@ function renderZakladkaDetail(b) {
     // Сваренная партия — без действий, только статус (brewed → «Варка завершена»)
     startBtnHtml = `<div style="font-size:15px; font-weight:800; color:var(--accent2);">✓ Варка завершена</div>`;
   } else if (canAct) {
+    const incomplete = isRunning && done < total;
     startBtnHtml = isRunning
-      ? `<button class="btn btn-danger btn-full" onclick="stopBrewTimer('${b.id}')">Завершить варку</button>`
+      ? `<button id="brew-finish-btn" class="btn ${incomplete?'btn-outline-danger':'btn-danger'} btn-full" onclick="stopBrewTimer('${b.id}')">Завершить варку</button>
+         <div id="brew-finish-hint" style="margin-top:8px; font-size:12px; font-weight:600; color:var(--danger); ${incomplete?'':'display:none;'}">Заполните сырьё — не введено ${total-done} из ${total}, чтобы завершить варку</div>`
       : `<button class="btn btn-primary btn-full" onclick="startBrewTimer('${b.id}')">Начать варку</button>`;
   } else {
     // режим наблюдения — без кнопок, только статус
@@ -8159,7 +8174,7 @@ function renderZakladkaDetail(b) {
                <span style="font-size:11px;color:var(--text2);white-space:nowrap;flex-shrink:0;">${ing.unit}</span>
              </div>`
           : `<div style="text-align:center; font-size:14px; font-weight:700; color:var(--text2);">${factVal || '—'} <span style="font-size:11px">${ing.unit}</span></div>`;
-        return `<div class="ingredient-row" id="ing-row-${i}" style="${isDone ? 'opacity:0.65;' : ''} display:grid; grid-template-columns:16px 1fr 56px 64px; gap:5px; align-items:center; padding:7px 0;">
+        return `<div class="ingredient-row${isDone ? '' : ' ing-row-missing'}" id="ing-row-${i}" style="${isDone ? 'opacity:0.65;' : ''} display:grid; grid-template-columns:16px 1fr 56px 64px; gap:5px; align-items:center; padding:7px 0;">
           <div class="ing-order" style="font-size:12px; color:var(--text3);">${ing.order}</div>
           <div class="ing-name" style="font-size:14px; line-height:1.2;">${ing.name}</div>
           <div style="text-align:right; font-size:14px; font-weight:700; color:var(--accent); white-space:nowrap;">${ing.normFact}<span style="font-size:11px; color:var(--text2); font-weight:600;"> ${ing.unit}</span></div>
@@ -8231,6 +8246,15 @@ function stopBrewTimer(id) {
       && !((getRoleById(currentUser.roleId)||{}).fullAccess)) {
     showToast('Эта варка назначена другому оператору'); return;
   }
+  // Жёсткая блокировка: без 100% введённого факта по сырью варку завершить нельзя —
+  // раньше это никак не проверялось, и партии уходили в "Сварено" с пустым фактом.
+  const missing = bCheck.ingredients.map((_,i)=>i).filter(i => bCheck.factIngredients[i] === undefined);
+  if (missing.length > 0) {
+    showToast(`Заполните все компоненты сырья — не введено: ${missing.length} из ${bCheck.ingredients.length}`);
+    missing.forEach(i => document.getElementById(`ing-row-${i}`)?.classList.add('ing-row-missing'));
+    document.getElementById(`ing-row-${missing[0]}`)?.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
   performCriticalBatchWrite(id, b => {
     b.brewEndedAt = new Date().toISOString();
     b.status = 'done';
@@ -8301,11 +8325,11 @@ function saveIngFact(i) {
   const val = parseFloat(input.value);
   if (!isNaN(val) && val >= 0) {
     b.factIngredients[i] = val;
-    if (row) row.style.opacity = '0.65';
+    if (row) { row.style.opacity = '0.65'; row.classList.remove('ing-row-missing'); }
     if (input) input.classList.add('filled');
   } else {
     delete b.factIngredients[i];
-    if (row) row.style.opacity = '1';
+    if (row) { row.style.opacity = '1'; row.classList.add('ing-row-missing'); }
     if (input) input.classList.remove('filled');
   }
   saveState();
@@ -8320,6 +8344,20 @@ function updateZakladkaProgress(b) {
   const lbl = document.querySelector('.progress-bar-wrap + div');
   if (bar) bar.style.width = pct + '%';
   if (lbl) lbl.textContent = `${done} из ${total} компонентов · ${pct}%`;
+
+  // Кнопка «Завершить варку» и подсказка под ней — без полного ре-рендера
+  // (иначе слетал бы фокус с инпута, в который оператор только что ввёл значение).
+  const btn = document.getElementById('brew-finish-btn');
+  const hint = document.getElementById('brew-finish-hint');
+  if (btn) {
+    const incomplete = done < total;
+    btn.classList.toggle('btn-outline-danger', incomplete);
+    btn.classList.toggle('btn-danger', !incomplete);
+  }
+  if (hint) {
+    hint.style.display = done < total ? '' : 'none';
+    hint.textContent = `Заполните сырьё — не введено ${total-done} из ${total}, чтобы завершить варку`;
+  }
 }
 
 function backToList() {
