@@ -2989,7 +2989,10 @@ function downloadStateBackup() {
   } catch (e) { alert('Не удалось сформировать копию: ' + e.message); }
 }
 
-function saveState() {
+function saveState(onResult) {
+  // onResult(status) — необязательный колбэк результата записи ('ok'|'stale'|'error'),
+  // используется только критичными действиями терминала (см. performCriticalBatchWrite).
+  // Обычные вызовы saveState() без аргумента ведут себя ровно как раньше.
   // Применяем входящее обновление (storage другой вкладки / onSnapshot) — НЕ пишем обратно,
   // иначе вкладки зацикливаются: storage→render→saveState→storage→… («зависание» всех разделов).
   if (_applyingRemoteState) return;
@@ -3001,13 +3004,14 @@ function saveState() {
                     (state.recipes && state.recipes.length > 0);
     if (!hasData) {
       console.warn('[Firestore] saveState заблокирован — state пуст и не загружен из Firestore');
+      if (onResult) onResult('error');
       return;
     }
   }
   // localStorage — быстрый офлайн-кэш
   try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
   // Firestore — основное общее хранилище (дебаунс 600 мс)
-  if (!db) return;
+  if (!db) { if (onResult) onResult('ok'); return; } // нет Firestore — localStorage уже записан, для критичных действий этого достаточно
   // Сразу блокируем onSnapshot чтобы он не перезаписал локальные изменения
   // до того как дебаунс отработает (иначе UI сбрасывается через ~200ms)
   _snapshotIgnoreUntil = Date.now() + 3600;
@@ -3031,18 +3035,56 @@ function saveState() {
       return newRev;
     }).then(newRev => {
       _baseRev = newRev;
+      if (onResult) onResult('ok');
     }).catch(err => {
       if (err && err._stale) {
         // Наше состояние устарело — принимаем свежее из облака, локальную запись отменяем.
         console.warn('[Firestore] saveState отменён: в облаке более свежая версия (rev ' +
           ((err._remote && err._remote._rev) || '?') + ' > base ' + _baseRev + '). Принимаю свежие данные.');
         _applyRemoteState(err._remote);
-        if (typeof showToast === 'function') showToast('Данные обновлены на другом устройстве — проверьте и повторите действие');
+        if (!onResult && typeof showToast === 'function') showToast('Данные обновлены на другом устройстве — проверьте и повторите действие');
+        if (onResult) onResult('stale');
       } else {
         console.error('[Firestore] saveState:', err);
+        if (onResult) onResult('error');
       }
     });
   }, 600);
+}
+
+// Обёртка для критичных операторских действий терминала (старт/финиш варки,
+// старт/финиш розлива, ввод факта). В отличие от обычного saveState(), знает,
+// удалась ли запись, и при отказе (устаревшая версия документа / обрыв сети)
+// САМА повторяет ту же мутацию поверх свежих данных — вместо того чтобы тихо
+// потерять действие оператора. После исчерпания попыток откатывает локальное
+// изменение (чтобы экран не показывал "сделано" при несохранённом факте) и
+// явно предупреждает — см. tasks/lessons.md по инциденту с "зависшим" розливом.
+function performCriticalBatchWrite(batchId, mutator, callbacks = {}, _retry = {}) {
+  const MAX_ATTEMPTS = 3;
+  const attempt = _retry.attempt || 1;
+  const b = getBatchById(batchId);
+  if (!b) return;
+  const snapshot = _retry.snapshot || { ...b };
+  mutator(b);
+  render();
+  saveState(status => {
+    if (status === 'ok') { if (callbacks.onSuccess) callbacks.onSuccess(getBatchById(batchId)); return; }
+    if (attempt < MAX_ATTEMPTS) {
+      setTimeout(() => performCriticalBatchWrite(batchId, mutator, callbacks, { attempt: attempt + 1, snapshot }), 500);
+      return;
+    }
+    const fresh = getBatchById(batchId);
+    if (fresh) {
+      // Object.assign не уберёт поля, которых не было в снимке (например, мутатор
+      // впервые проставил pouringStartedAt) — сначала убираем такие «новые» ключи,
+      // потом восстанавливаем значения тех, что были.
+      Object.keys(fresh).forEach(k => { if (!(k in snapshot)) delete fresh[k]; });
+      Object.assign(fresh, snapshot);
+    }
+    render();
+    if (callbacks.onExhausted) callbacks.onExhausted();
+    else alert('⚠️ Не удалось сохранить действие — нет связи с сервером.\nПроверьте подключение и повторите.');
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5326,7 +5368,12 @@ function wpSetBrew(sku, dateIso, qty) {
 
 function wpIsGenerated(sku, dateIso) {
   const gen = state.wpGenerated[state.wpWeekStart];
-  return !!(gen && gen[sku] && gen[sku][dateIso]);
+  const entry = gen && gen[sku] && gen[sku][dateIso];
+  if (!entry) return false;
+  // новый формат — массив batchIds (может, в теории, быть пустым — тогда не считается сформированным);
+  // старый формат — одиночная строка либо объект { batchId }
+  if (typeof entry === 'object' && Array.isArray(entry.batchIds)) return entry.batchIds.length > 0;
+  return true;
 }
 
 function wpGeneratedBatchId(sku, dateIso) {
@@ -5486,10 +5533,14 @@ function renderWpHistory() {
       const recipe = state.recipes.find(r => r.sku === sku);
       Object.keys(weekData[sku]).forEach(date => {
         const entry = weekData[sku][date];
-        const batchId = (entry && typeof entry === 'object') ? entry.batchId : entry; // старый формат — просто строка
         const qty = (entry && typeof entry === 'object' && entry.qty !== undefined) ? entry.qty : 0;
-        const batch = getBatchById(batchId);
-        rows.push({ sku, name: recipe ? recipe.name : sku, date, qty, batchId, batch });
+        // entry может быть: старая строка-id, старый {batchId}, новый {batchIds:[...]}
+        let batchIds = [];
+        if (entry && typeof entry === 'object' && Array.isArray(entry.batchIds)) batchIds = entry.batchIds;
+        else if (entry && typeof entry === 'object' && entry.batchId) batchIds = [entry.batchId];
+        else if (entry && typeof entry !== 'object') batchIds = [entry];
+        const batches = batchIds.map(id => ({ id, batch: getBatchById(id) }));
+        rows.push({ sku, name: recipe ? recipe.name : sku, date, qty, batches });
       });
     });
     rows.sort((a,b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
@@ -5506,7 +5557,7 @@ function renderWpHistory() {
             <span style="color:var(--text2); width:80px; flex-shrink:0;">${fmtDateHuman(row.date)}</span>
             <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row.name}</span>
             <span style="color:var(--text2);">${row.qty} шт</span>
-            <span style="color:var(--text3); font-size:11px;">${row.batch ? row.batchId : `${row.batchId} (удалена)`}</span>
+            <span style="color:var(--text3); font-size:11px; text-align:right;">${row.batches.map(x => x.batch ? x.id : `${x.id} (удалена)`).join(', ') || '—'}</span>
           </div>`).join('')}
         </div>
       </div>
@@ -5557,31 +5608,47 @@ function generateProductionFromWeekPlan() {
 
   toGenerate.forEach(item => {
     const { sku, recipe, date, qty } = item;
-    const volume = Math.round(qty * recipe.tara * 10) / 10;
     const hours = recipe.brewHours || 2;
 
-    if (!runningLoadsByDate[date]) runningLoadsByDate[date] = {};
-    const reactor = autoAssignReactor(date, hours, runningLoadsByDate[date]);
-    // autoAssignReactor уже добавил `hours` в runningLoadsByDate[date][reactor] —
-    // итоговая нагрузка = существующие сохранённые партии + всё виртуально назначенное в этом проходе
-    const totalLoadAfter = getReactorDayLoad(reactor, date, null) + runningLoadsByDate[date][reactor];
-    if (totalLoadAfter > state.workdayHours) {
-      conflicts.push(`${recipe.name} на ${fmtDateHuman(date)} (${reactor})`);
-    }
+    // Вместимость ОДНОГО реактора по рецептуре (шт). Если введённое количество
+    // больше — делим на несколько полных партий вместо того, чтобы закладывать
+    // весь объём в один реактор. Последняя партия получает остаток.
+    const unitsPerBatch = Math.floor((recipe.baseBatch || 0) / (recipe.tara || 1));
+    const canSplit = Number.isFinite(unitsPerBatch) && unitsPerBatch > 0 && qty > unitsPerBatch;
+    const numBatches = canSplit ? Math.ceil(qty / unitsPerBatch) : 1;
 
-    const priority = 3; // обычный приоритет для плановых партий недели
-    const batch = mkBatch({
-      sku, volume, tara: recipe.tara, reactor, priority, status: 'planned',
-      brewDate: date, brewHours: hours,
-      note: `Недельный план · сводная варка`,
-      weekPlanSource: { weekStart: state.wpWeekStart, sku, date }
-    });
-    state.batches.push(batch);
-    createdCount++;
+    const batchIds = [];
+    if (!runningLoadsByDate[date]) runningLoadsByDate[date] = {};
+
+    for (let i = 0; i < numBatches; i++) {
+      const chunkQty = canSplit
+        ? (i < numBatches - 1 ? unitsPerBatch : qty - unitsPerBatch * (numBatches - 1))
+        : qty;
+      const volume = Math.round(chunkQty * recipe.tara * 10) / 10;
+
+      const reactor = autoAssignReactor(date, hours, runningLoadsByDate[date]);
+      // autoAssignReactor уже добавил `hours` в runningLoadsByDate[date][reactor] —
+      // итоговая нагрузка = существующие сохранённые партии + всё виртуально назначенное в этом проходе
+      const totalLoadAfter = getReactorDayLoad(reactor, date, null) + runningLoadsByDate[date][reactor];
+      if (totalLoadAfter > state.workdayHours) {
+        conflicts.push(`${recipe.name} на ${fmtDateHuman(date)} (${reactor})${numBatches > 1 ? ` [${i+1}/${numBatches}]` : ''}`);
+      }
+
+      const priority = 3; // обычный приоритет для плановых партий недели
+      const batch = mkBatch({
+        sku, volume, tara: recipe.tara, reactor, priority, status: 'planned',
+        brewDate: date, brewHours: hours,
+        note: numBatches > 1 ? `Недельный план · сводная варка · реактор ${i+1}/${numBatches}` : `Недельный план · сводная варка`,
+        weekPlanSource: { weekStart: state.wpWeekStart, sku, date }
+      });
+      state.batches.push(batch);
+      batchIds.push(batch.id);
+      createdCount++;
+    }
 
     if (!state.wpGenerated[state.wpWeekStart]) state.wpGenerated[state.wpWeekStart] = {};
     if (!state.wpGenerated[state.wpWeekStart][sku]) state.wpGenerated[state.wpWeekStart][sku] = {};
-    state.wpGenerated[state.wpWeekStart][sku][date] = { batchId: batch.id, qty };
+    state.wpGenerated[state.wpWeekStart][sku][date] = { batchIds, qty };
   });
 
   // Остаток склада НЕ трогаем автоматически: он вносится только вручную (wpSetStock).
@@ -6378,30 +6445,36 @@ function updatePouringTimerDisplay(b) {
 
 function startPouring(batchId) {
   if (!canDo('startPouring')) { showToast('Недостаточно прав'); return; }
-  const b = getBatchById(batchId);
-  if (!b) return;
+  if (!getBatchById(batchId)) return;
   const role = getRoleById(currentUser.roleId);
-  b.pouringOperatorName = role ? role.login : (b.pouringOperatorName || null);
-  b.pouringStartedAt = new Date().toISOString();
-  logActivity('Розлив начат', { target: b.id, after: { operator: b.pouringOperatorName, startedAt: b.pouringStartedAt } });
-  saveState();
-  render();
-  if (state.currentPouringId === batchId) renderPouringDetail(b);
-  showToast(`Розлив ${batchId} начат`);
+  const operatorName = role ? role.login : null;
+  performCriticalBatchWrite(batchId, b => {
+    b.pouringOperatorName = operatorName || b.pouringOperatorName || null;
+    b.pouringStartedAt = new Date().toISOString();
+  }, {
+    onSuccess: (b) => {
+      logActivity('Розлив начат', { target: b.id, after: { operator: b.pouringOperatorName, startedAt: b.pouringStartedAt } });
+      if (state.currentPouringId === batchId) renderPouringDetail(b);
+      showToast(`Розлив ${batchId} начат`);
+    }
+  });
 }
 
 function stopPouring(batchId) {
   if (!canDo('stopPouring')) { showToast('Недостаточно прав'); return; }
-  const b = getBatchById(batchId);
-  if (!b) return;
-  b.pouringEndedAt = new Date().toISOString();
-  logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок розлива', page: 'production', pmStage: 'poured',
-    text: `Оператор розлива завершил розлив партии ${b.id}, количество пока не введено.` });
-  logActivity('Розлив завершён', { target: b.id, after: { endedAt: b.pouringEndedAt } });
-  saveState();
-  if (state.currentPouringId === batchId) renderPouringDetail(b);
-  renderIntake();
-  showToast(`Розлив ${batchId} завершён · введите количество`);
+  if (!getBatchById(batchId)) return;
+  performCriticalBatchWrite(batchId, b => {
+    b.pouringEndedAt = new Date().toISOString();
+  }, {
+    onSuccess: (b) => {
+      logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок розлива', page: 'production', pmStage: 'poured',
+        text: `Оператор розлива завершил розлив партии ${b.id}, количество пока не введено.` });
+      logActivity('Розлив завершён', { target: b.id, after: { endedAt: b.pouringEndedAt } });
+      if (state.currentPouringId === batchId) renderPouringDetail(b);
+      renderIntake();
+      showToast(`Розлив ${batchId} завершён · введите количество`);
+    }
+  });
 }
 
 function saveIntakeQty(batchId) {
@@ -6409,20 +6482,23 @@ function saveIntakeQty(batchId) {
   const input = document.getElementById(`intake-qty-${batchId}`);
   const qty = parseInt(input.value);
   if (!qty || qty <= 0) { showToast('Введите фактический выход (шт)'); return; }
-  const b = getBatchById(batchId);
-  if (!b) return;
-  b.factQty = qty;
-  const devForLog = ((qty - b.planQty)/b.planQty*100).toFixed(1);
-  logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок розлива', page: 'production', pmStage: 'finished',
-    text: `Оператор розлива завершил розлив партии ${b.id}. План: ${b.planQty} шт. Факт: ${qty} шт. Отклонение: ${devForLog > 0 ? '+' : ''}${devForLog}%.` });
-  logActivity('Выход записан', { target: b.id, after: { factQty: qty, planQty: b.planQty, deviation: devForLog } });
-  saveState();
-  // Партия принята и уходит из очереди розлива — закрываем детальный экран терминала
-  if (state.currentPouringId === batchId) backToIntakeList();
-  renderIntake();
-  render();
-  const dev = devForLog;
-  showToast(`${batchId}: принято ${qty} шт · Откл.: ${dev > 0 ? '+' : ''}${dev}%`);
+  const bCheck = getBatchById(batchId);
+  if (!bCheck) return;
+  performCriticalBatchWrite(batchId, b => {
+    b.factQty = qty;
+  }, {
+    onSuccess: (b) => {
+      const devForLog = ((qty - b.planQty)/b.planQty*100).toFixed(1);
+      logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок розлива', page: 'production', pmStage: 'finished',
+        text: `Оператор розлива завершил розлив партии ${b.id}. План: ${b.planQty} шт. Факт: ${qty} шт. Отклонение: ${devForLog > 0 ? '+' : ''}${devForLog}%.` });
+      logActivity('Выход записан', { target: b.id, after: { factQty: qty, planQty: b.planQty, deviation: devForLog } });
+      // Партия принята и уходит из очереди розлива — закрываем детальный экран терминала
+      if (state.currentPouringId === batchId) backToIntakeList();
+      renderIntake();
+      render();
+      showToast(`${batchId}: принято ${qty} шт · Откл.: ${devForLog > 0 ? '+' : ''}${devForLog}%`);
+    }
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -8036,52 +8112,60 @@ function updateBrewTimerDisplay(b) {
 
 function startBrewTimer(id) {
   if (!canDo('startBrewing')) { showToast('Недостаточно прав'); return; }
-  const b = getBatchById(id);
-  if (!b) return;
+  const bCheck = getBatchById(id);
+  if (!bCheck) return;
   // оператор варки может стартовать только свою назначенную задачу
-  if (b.assignedBrewingOperatorRoleId && b.assignedBrewingOperatorRoleId !== currentUser.roleId
+  if (bCheck.assignedBrewingOperatorRoleId && bCheck.assignedBrewingOperatorRoleId !== currentUser.roleId
       && !((getRoleById(currentUser.roleId)||{}).fullAccess)) {
     showToast('Эта варка назначена другому оператору'); return;
   }
-  b.status = 'active';
-  b.brewStartedAt = new Date().toISOString();
-  logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewing',
-    text: `Оператор варки начал варку партии ${b.id} на реакторе ${b.reactor}.` });
-  logActivity('Варка начата', { target: b.id, after: { product: b.name, reactor: b.reactor, startedAt: b.brewStartedAt } });
-  saveState();
-  renderZakladkaDetail(b);
-  showToast(`Варка ${id} началась`);
+  performCriticalBatchWrite(id, b => {
+    b.status = 'active';
+    b.brewStartedAt = new Date().toISOString();
+  }, {
+    onSuccess: (b) => {
+      logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewing',
+        text: `Оператор варки начал варку партии ${b.id} на реакторе ${b.reactor}.` });
+      logActivity('Варка начата', { target: b.id, after: { product: b.name, reactor: b.reactor, startedAt: b.brewStartedAt } });
+      renderZakladkaDetail(b);
+      showToast(`Варка ${id} началась`);
+    }
+  });
 }
 
 function stopBrewTimer(id) {
   if (!canDo('finishBrewing')) { showToast('Недостаточно прав'); return; }
-  const b = getBatchById(id);
-  if (!b) return;
-  if (b.assignedBrewingOperatorRoleId && b.assignedBrewingOperatorRoleId !== currentUser.roleId
+  const bCheck = getBatchById(id);
+  if (!bCheck) return;
+  if (bCheck.assignedBrewingOperatorRoleId && bCheck.assignedBrewingOperatorRoleId !== currentUser.roleId
       && !((getRoleById(currentUser.roleId)||{}).fullAccess)) {
     showToast('Эта варка назначена другому оператору'); return;
   }
-  b.brewEndedAt = new Date().toISOString();
-  b.status = 'done';
-  logActivity('Варка завершена', { target: b.id, after: { product: b.name, reactor: b.reactor, endedAt: b.brewEndedAt } });
-  b.sentToBrewing = true; // гарантия: партия попадёт в 'brewed', а не застрянет в 'queued'
-
-  // Если линия розлива уже назначена — передаём в очередь розлива (оператор увидит),
-  // но в PM-доске партия остаётся в «Сварено» до нажатия «Начать розлив».
-  if (b.pouringLine) {
-    b.sentToPouring = true;
-    if (!b.pouringDate) b.pouringDate = fmtDate(new Date());
-    logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewed',
-      text: `Варщик завершил варку партии ${b.id}. Линия «${b.pouringLine}» назначена — ожидает начала розлива оператором.` });
-  } else {
-    logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewed',
-      text: `Варщик завершил варку партии ${b.id}. Ожидает назначения линии розлива.` });
-  }
-
-  saveState();
-  render();
-  showToast(b.pouringLine ? `Варка ${id} завершена — ожидает розлива (${b.pouringLine})` : `Варка ${id} завершена`);
-  backToList();
+  performCriticalBatchWrite(id, b => {
+    b.brewEndedAt = new Date().toISOString();
+    b.status = 'done';
+    b.sentToBrewing = true; // гарантия: партия попадёт в 'brewed', а не застрянет в 'queued'
+    // Если линия розлива уже назначена — передаём в очередь розлива (оператор увидит),
+    // но в PM-доске партия остаётся в «Сварено» до нажатия «Начать розлив».
+    if (b.pouringLine) {
+      b.sentToPouring = true;
+      if (!b.pouringDate) b.pouringDate = fmtDate(new Date());
+    }
+  }, {
+    onSuccess: (b) => {
+      logActivity('Варка завершена', { target: b.id, after: { product: b.name, reactor: b.reactor, endedAt: b.brewEndedAt } });
+      if (b.pouringLine) {
+        logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewed',
+          text: `Варщик завершил варку партии ${b.id}. Линия «${b.pouringLine}» назначена — ожидает начала розлива оператором.` });
+      } else {
+        logJournalEvent({ batchId: b.id, batchName: b.name, source: 'Участок варки', page: 'production', pmStage: 'brewed',
+          text: `Варщик завершил варку партии ${b.id}. Ожидает назначения линии розлива.` });
+      }
+      render();
+      showToast(b.pouringLine ? `Варка ${id} завершена — ожидает розлива (${b.pouringLine})` : `Варка ${id} завершена`);
+      backToList();
+    }
+  });
 }
 
 // Оператор варки сообщает о проблеме — пишется в журнал событий и activityLog.
