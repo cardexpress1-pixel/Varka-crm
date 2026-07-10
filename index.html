@@ -1841,6 +1841,17 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
     <div class="card-title">Отчёт по сменам — сырьё и выход продукции</div>
     <div id="reports-main-table"></div>
   </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="card-title">Расход сырья за период</div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+      <input type="date" id="reports-range-from" />
+      <span>—</span>
+      <input type="date" id="reports-range-to" />
+      <button class="btn btn-success btn-sm" onclick="exportIngredientRangeToExcel()">Скачать Excel за период</button>
+    </div>
+    <div class="note">Сводка по каждой позиции: план/факт выпуска и расход сырья (норма по рецептуре / факт, введённый на участке варки) за выбранные даты.</div>
+  </div>
 </div>
 
 <!-- ═══════════════ PAGE: JOURNAL ═══════════════ -->
@@ -6521,22 +6532,14 @@ function reportsGoToday() {
   renderReports();
 }
 
-function computeReportData(viewDate) {
-  // партии этого дня, исключая удалённые — отменённые тоже не считаем (нет ни расхода, ни выхода)
-  const dayBatches = state.batches.filter(b => b.brewDate === viewDate && b.status !== 'deleted' && b.status !== 'cancelled');
-  const doneBatches = dayBatches.filter(b => b.status === 'done');
-
-  const totalPlanQty = doneBatches.reduce((s,b) => s + (b.planQty||0), 0);
-  const totalFactQty = doneBatches.reduce((s,b) => s + (b.factQty||0), 0);
-  const pendingFact = doneBatches.filter(b => b.factQty === null || b.factQty === undefined).length;
-  const avgDev = totalPlanQty ? ((totalFactQty - totalPlanQty) / totalPlanQty * 100) : 0;
-
-  // ── Группировка по продукту: сырьё (норма/факт) + итог выхода продукции ──
-  // Ключевой момент: сырьё считается ОТДЕЛЬНО для каждого SKU — даже если у двух
-  // продуктов одинаковый компонент ("Вода деионизированная"), их расход не смешивается,
-  // так как для бухгалтерии важно видеть, что именно ушло именно на этот продукт.
+// Группировка по продукту: сырьё (норма/факт) + итог выхода продукции.
+// Ключевой момент: сырьё считается ОТДЕЛЬНО для каждого SKU — даже если у двух
+// продуктов одинаковый компонент ("Вода деионизированная"), их расход не смешивается,
+// так как для бухгалтерии важно видеть, что именно ушло именно на этот продукт.
+// Общая для однодневного отчёта и отчёта за период — вход просто разный набор партий.
+function aggregateIngredientsBySku(batches) {
   const bySku = {};
-  dayBatches.forEach(b => {
+  batches.forEach(b => {
     if (!bySku[b.sku]) bySku[b.sku] = { name: b.name, planQty: 0, factQty: 0, hasFact: false, batches: 0, ingredients: {} };
     const entry = bySku[b.sku];
     entry.planQty += b.planQty || 0;
@@ -6555,8 +6558,31 @@ function computeReportData(viewDate) {
       }
     });
   });
+  return bySku;
+}
+
+function computeReportData(viewDate) {
+  // партии этого дня, исключая удалённые — отменённые тоже не считаем (нет ни расхода, ни выхода)
+  const dayBatches = state.batches.filter(b => b.brewDate === viewDate && b.status !== 'deleted' && b.status !== 'cancelled');
+  const doneBatches = dayBatches.filter(b => b.status === 'done');
+
+  const totalPlanQty = doneBatches.reduce((s,b) => s + (b.planQty||0), 0);
+  const totalFactQty = doneBatches.reduce((s,b) => s + (b.factQty||0), 0);
+  const pendingFact = doneBatches.filter(b => b.factQty === null || b.factQty === undefined).length;
+  const avgDev = totalPlanQty ? ((totalFactQty - totalPlanQty) / totalPlanQty * 100) : 0;
+
+  const bySku = aggregateIngredientsBySku(dayBatches);
 
   return { dayBatches, doneBatches, totalPlanQty, totalFactQty, pendingFact, avgDev, bySku };
+}
+
+// Тот же расход сырья/выход, но за диапазон дат варки (не один день) — для сводного
+// отчёта по позициям за период (§ Расход сырья за период на вкладке «Отчёты»).
+function computeReportDataRange(fromDate, toDate) {
+  const batches = state.batches.filter(b => b.brewDate >= fromDate && b.brewDate <= toDate
+    && b.status !== 'deleted' && b.status !== 'cancelled');
+  const bySku = aggregateIngredientsBySku(batches);
+  return { batches, bySku };
 }
 
 function renderReports() {
@@ -6571,6 +6597,14 @@ function renderReports() {
   updateDateNavUI('reports-date-human', 'reports-today-btn', viewDate);
   const dateLabel = document.getElementById('reports-date-label');
   if (dateLabel) dateLabel.textContent = isToday ? `Сегодня · ${fmtDateHuman(viewDate)}` : fmtDateHuman(viewDate);
+
+  // Период для сводного отчёта по сырью — по умолчанию текущая неделя (как в
+  // недельном плане), но только при первой отрисовке: не перетирать даты, если
+  // пользователь уже выбрал свой диапазон.
+  const rangeFromEl = document.getElementById('reports-range-from');
+  const rangeToEl = document.getElementById('reports-range-to');
+  if (rangeFromEl && !rangeFromEl.value) rangeFromEl.value = fmtDate(getMondayOf(new Date()));
+  if (rangeToEl && !rangeToEl.value) rangeToEl.value = fmtDate(addDays(getMondayOf(new Date()), 6));
 
   const { dayBatches, totalPlanQty, totalFactQty, avgDev, bySku } = computeReportData(viewDate);
 
@@ -6690,10 +6724,20 @@ function exportReportToExcel() {
   XLSX.utils.book_append_sheet(wb, summaryWs, safeSheetName('Сводка', usedNames));
 
   // ── Лист на каждый продукт ──
+  appendIngredientSheets(wb, bySku, usedNames, p => `Дата: ${fmtDateHuman(viewDate)} · Партий: ${p.batches}`);
+
+  downloadWorkbook(wb, `Отчёт_за_смену_${viewDate}.xlsx`);
+}
+
+// Лист на каждый продукт с расходом сырья (норма/факт/откл.) + выход готовой
+// продукции — общее для однодневного отчёта и отчёта за период (см.
+// exportReportToExcel / exportIngredientRangeToExcel). subtitleFn(p) даёт вторую
+// строку листа (дата или период) — единственное, что у них отличается.
+function appendIngredientSheets(wb, bySku, usedNames, subtitleFn) {
   Object.values(bySku).forEach(p => {
     const rows = [
       [p.name],
-      [`Дата: ${fmtDateHuman(viewDate)} · Партий: ${p.batches}`],
+      [subtitleFn(p)],
       [],
       ['Компонент сырья', 'Норма', 'Факт', 'Откл.'],
     ];
@@ -6714,19 +6758,65 @@ function exportReportToExcel() {
     ws['!cols'] = [{wch:30},{wch:16},{wch:16},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, safeSheetName(p.name, usedNames));
   });
+}
 
+function downloadWorkbook(wb, filename) {
   try {
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `Отчёт_за_смену_${viewDate}.xlsx`;
+    a.href = url; a.download = filename;
     document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
   } catch(e) {
-    XLSX.writeFile(wb, `Отчёт_за_смену_${viewDate}.xlsx`);
+    XLSX.writeFile(wb, filename);
   }
   showToast('Файл скачан');
+}
+
+// ── Сводный отчёт по расходу сырья за произвольный период (не один день) ──
+function exportIngredientRangeToExcel() {
+  if (typeof XLSX === 'undefined') { showToast('Библиотека экспорта не загрузилась, проверьте подключение к интернету'); return; }
+  const fromDate = document.getElementById('reports-range-from').value;
+  const toDate = document.getElementById('reports-range-to').value;
+  if (!fromDate || !toDate) { showToast('Укажите обе даты периода'); return; }
+  if (fromDate > toDate) { showToast('Дата «с» позже даты «по»'); return; }
+
+  const { batches, bySku } = computeReportDataRange(fromDate, toDate);
+  if (!batches.length) { showToast('Нет варок за этот период'); return; }
+
+  const doneBatches = batches.filter(b => b.status === 'done');
+  const totalPlanQty = doneBatches.reduce((s,b) => s + (b.planQty||0), 0);
+  const totalFactQty = doneBatches.reduce((s,b) => s + (b.factQty||0), 0);
+  const avgDev = totalPlanQty ? ((totalFactQty - totalPlanQty) / totalPlanQty * 100) : 0;
+  const periodLabel = `${fmtDateHuman(fromDate)} — ${fmtDateHuman(toDate)}`;
+
+  const wb = XLSX.utils.book_new();
+  const usedNames = new Set();
+
+  const summaryRows = [
+    ['Расход сырья за период', periodLabel],
+    [],
+    ['Показатель', 'Значение'],
+    ['Варок за период', batches.length],
+    ['План выпуска (шт)', totalPlanQty],
+    ['Факт выпуска (шт)', totalFactQty],
+    ['Отклонение план/факт', totalPlanQty ? (avgDev>0?'+':'')+avgDev.toFixed(1)+'%' : '—'],
+    [],
+    ['Продукт', 'Партий', 'План (шт)', 'Факт (шт)', 'Откл.'],
+  ];
+  Object.values(bySku).forEach(p => {
+    const dev = p.hasFact && p.planQty ? ((p.factQty - p.planQty) / p.planQty * 100) : null;
+    summaryRows.push([p.name, p.batches, p.planQty, p.hasFact ? p.factQty : '—', dev !== null ? (dev>0?'+':'')+dev.toFixed(1)+'%' : '—']);
+  });
+  const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
+  summaryWs['!cols'] = [{wch:32},{wch:14},{wch:14},{wch:14},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, summaryWs, safeSheetName('Сводка', usedNames));
+
+  appendIngredientSheets(wb, bySku, usedNames, p => `Период: ${periodLabel} · Партий: ${p.batches}`);
+
+  downloadWorkbook(wb, `Расход_сырья_${fromDate}_${toDate}.xlsx`);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
