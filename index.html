@@ -7662,6 +7662,12 @@ function createBatch() {
   if (!tara)   { showToast('Укажите объём тары'); return; }
   if (!brewDate) { showToast('Укажите дату варки'); return; }
   if (!brewHours) { showToast('Укажите часы варки'); return; }
+  // Аудит безопасности §3: границы значений — отрицательные объём/тара/часы и даты
+  // вне разумного диапазона раньше проходили без проверки (truthy-проверки их не ловят).
+  if (volume < 0 || tara < 0 || brewHours < 0) { showToast('Объём, тара и часы варки не могут быть отрицательными'); return; }
+  const brewYear = parseInt(String(brewDate).slice(0, 4), 10);
+  const nowYear = new Date().getFullYear();
+  if (!brewYear || brewYear < nowYear - 1 || brewYear > nowYear + 2) { showToast('Проверьте дату варки — год вне разумного диапазона'); return; }
 
   const check = checkConflict(reactor, brewDate, brewHours, null);
   if (check.conflict) {
@@ -7797,6 +7803,9 @@ function openFinish(id) {
 
 function finishBatch(id) {
   const qty = parseInt(document.getElementById('finish-qty').value);
+  // Аудит безопасности §3: без этой проверки NaN/отрицательное значение уходило в
+  // factQty напрямую и ломало проценты отклонения и отчёты.
+  if (isNaN(qty) || qty < 0) { showToast('Укажите корректное количество (0 и больше)'); return; }
   const b = getBatchById(id);
   b.factQty = qty;
   b.status = 'done';
