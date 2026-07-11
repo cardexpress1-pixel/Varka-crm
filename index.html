@@ -9,6 +9,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0f1117">
 <link rel="manifest" href="manifest.json">
+<!-- Общий фавикон платформы (portal владеет /assets на корне домена varka.kz). -->
+<link rel="icon" type="image/png" href="/assets/favicon-32.png">
 <title>ВарКа — производственная система</title>
 <style>
   :root {
@@ -3366,7 +3368,9 @@ function applySidebarState() {
 // локальный логин в приоритете, SSO — запасной путь.
 const SSO_ROLE_ID = '__portal_sso__';
 async function trySso() {
-  const portalToken = sessionStorage.getItem('portal_token');
+  // localStorage, не sessionStorage — портал открывает Manufacture в новой
+  // вкладке (target=_blank), sessionStorage между вкладками не расшаривается.
+  const portalToken = localStorage.getItem('portal_token');
   if (!portalToken) return false;
   try {
     const res = await fetch(API_BASE + '/whoami', {
