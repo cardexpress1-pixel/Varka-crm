@@ -3049,6 +3049,8 @@ function getFirebaseRoleLevel(role) {
   return 'employee';
 }
 
+// ВНИМАНИЕ: поле role здесь самозаявленное клиентом, не источник правды для авторизации.
+// НЕ использовать в будущих Firestore Rules для проверки прав — см. SECURITY.md, находка Часть 2.
 async function writeUserProfile(roleId) {
   if (!db || !_fbUid) return;
   const role = getRoleById(roleId);
@@ -3221,6 +3223,9 @@ function doLogin() {
   const pwd = (document.getElementById('login-password').value || '').trim();
   const role = state.roles.find(r => r.login.trim() === login);
   if (!role || (role.password || '').trim() !== pwd) {
+    // Аудит безопасности §6: раньше неудачные попытки нигде не фиксировались —
+    // подбор пароля не оставлял следа. Логируем только логин, без самого пароля.
+    logActivity('Неудачная попытка входа', { target: login });
     document.getElementById('login-error').style.color = 'var(--danger)';
     document.getElementById('login-error').textContent = 'Неверный логин или пароль';
     return;
