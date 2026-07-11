@@ -3225,7 +3225,7 @@ function doLogin() {
     document.getElementById('login-error').textContent = 'Неверный логин или пароль';
     return;
   }
-  currentUser = { roleId: role.id };
+  currentUser = { roleId: role.id, loginAt: Date.now() };
   try { sessionStorage.setItem('varka_session', JSON.stringify(currentUser)); } catch(e) {}
   writeUserProfile(role.id);
   logActivity('Вход в систему', { target: role.login, details: { roleName: role.name, level: getFirebaseRoleLevel(role) } });
@@ -3277,13 +3277,18 @@ function applySidebarState() {
   updateSidebarEdgeBtn(collapsed === '1');
 }
 
+// Аудит безопасности §1: TTL сессии — 12 часов (рабочая смена с запасом). Без loginAt
+// (сессии, созданные до этой правки) считаем устаревшими — безопаснее, чем доверять бессрочно.
+const SESSION_TTL_MS = 12 * 3600 * 1000;
 function tryRestoreSession() {
   try {
     const s = sessionStorage.getItem('varka_session');
     if (s) {
       const parsed = JSON.parse(s);
+      const fresh = parsed && parsed.loginAt && (Date.now() - parsed.loginAt) <= SESSION_TTL_MS;
       // убеждаемся, что роль из сессии всё ещё существует (могла быть удалена админом)
-      if (parsed && parsed.roleId && getRoleById(parsed.roleId)) { currentUser = parsed; return true; }
+      if (fresh && parsed.roleId && getRoleById(parsed.roleId)) { currentUser = parsed; return true; }
+      sessionStorage.removeItem('varka_session'); // истекла или битая — не оставляем висеть
     }
   } catch(e) {}
   return false;
