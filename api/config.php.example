@@ -7,4 +7,6 @@ define('DB_USER', '');
 define('DB_PASS', '');
 
 // Origin, которому разрешены CORS-запросы к API (боевой адрес приложения).
-define('ALLOWED_ORIGIN', 'https://manufacture.varka.kz');
+// Переход платформы на пути одного домена (2026-07-11, см. PLATFORM_ARCHITECTURE.md):
+// приложение теперь на varka.kz/manufacture, origin — сам домен varka.kz.
+define('ALLOWED_ORIGIN', 'https://varka.kz');
