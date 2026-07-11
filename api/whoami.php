@@ -31,11 +31,17 @@ if ($session['role_id'] !== null) {
 // SSO-сессия (нет локальной роли-должности) — синтетический админ-объект.
 // verifyPortalToken() пускает по SSO только уровень 'admin', так что
 // fullAccess здесь всегда true (см. комментарий в storage.php).
+//
+// tabs — ПОЛНЫЙ список (как у реальной роли admin, см. index.html::ALL_TABS/
+// defaultRoles()), а не просто ['admin']: боковое меню строится по
+// пересечению с этим массивом, fullAccess его не заменяет — с одной
+// вкладкой 'admin' меню показывало только раздел «Админ-панель», без
+// дашборда и остальных разделов (баг, найден и исправлен 2026-07-12).
 echo json_encode(['role' => [
     'id'         => null,
     'name'       => $session['name'] ?? $session['login'],
     'login'      => $session['login'],
     'fullAccess' => (bool)$session['is_admin'],
-    'tabs'       => ['admin'],
+    'tabs'       => ['dashboard', 'production', 'weekplan', 'calendar', 'warshchik', 'intake', 'reports', 'journal', 'admin'],
     'fields'     => (object)[],
 ]], JSON_UNESCAPED_UNICODE);
