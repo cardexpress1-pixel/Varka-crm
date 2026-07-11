@@ -7,9 +7,14 @@
 if (php_sapi_name() !== 'cli') { http_response_code(403); exit('CLI only'); }
 require_once __DIR__ . '/storage.php';
 
-$dir   = $argv[1] ?? '';
+// Аргумент через $argv — предпочтительно. Фолбэк на дефолтный путь
+// (../../import_private от api/, т.е. рядом с папкой сайта) — на некоторых
+// панелях Планировщик задач не пробрасывает "аргументы" в $argv для типа
+// "Выполнить PHP-скрипт", тогда единственный способ узнать путь — это
+// местоположение самого скрипта.
+$dir   = $argv[1] ?? (dirname(__DIR__, 2) . '/import_private');
 $force = in_array('--force', $argv, true);
-if ($dir === '' || !is_dir($dir)) exit("usage: php import.php <export_dir> [--force]\n");
+if ($dir === '' || !is_dir($dir)) exit("usage: php import.php <export_dir> [--force] (пробовал: $dir)\n");
 
 $stateFile = $dir . '/varka_state.json';
 $logFile   = $dir . '/activityLog.json';
