@@ -202,8 +202,80 @@ function currentSession(): ?array {
                          FROM sessions WHERE token = ?');
     $q->execute([$token]);
     $s = $q->fetch();
-    if (!$s || (int)$s['expires_at'] < time()) return null;
-    return $s;
+    if ($s && (int)$s['expires_at'] >= time()) return $s;
+    return verifyPortalToken($token);
+}
+
+// SSO-слой поверх локального логина (шаг 5 ТЗ) — токен портала (varka.kz)
+// как второй источник сессии, ровно то место, о котором предупреждал
+// комментарий выше у requireAuth(). Portal и Manufacture — общий origin
+// (varka.kz / varka.kz/manufacture), поэтому portal_token из sessionStorage
+// портала уже доступен фронтенду Manufacture напрямую.
+//
+// В Manufacture роль = должность (admin/operator/warshchik/intake — набор
+// вкладок), не человек, поэтому уровни портала view/edit нельзя однозначно
+// сопоставить с конкретной ролью-должностью. SSO пускает ТОЛЬКО уровень
+// 'admin' (полный доступ, tabs/fields не нужны для проверки — is_admin даёт
+// fullAccess) — открытый вопрос про персональные роли для остальных уровней
+// зафиксирован в 01_IDENTITY_SERVICE_SPEC.md, раздел 6, решается отдельно.
+//
+// Кэш в отдельной таблице (не JSON-файл — Manufacture целиком на MySQL),
+// TTL 60 сек, чтобы не бить по сети на каждый запрос.
+function verifyPortalToken(string $token): ?array {
+    $db = pdo();
+    $db->exec("CREATE TABLE IF NOT EXISTS portal_verify_cache (
+        token VARCHAR(64) PRIMARY KEY,
+        session_json TEXT NOT NULL,
+        expires_at INT UNSIGNED NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $now = time();
+    $db->prepare('DELETE FROM portal_verify_cache WHERE expires_at < ?')->execute([$now]);
+
+    $q = $db->prepare('SELECT session_json FROM portal_verify_cache WHERE token = ?');
+    $q->execute([$token]);
+    $row = $q->fetch();
+    if ($row) {
+        return json_decode($row['session_json'], true) ?: null;
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method'  => 'POST',
+            'header'  => "Authorization: Bearer $token\r\nContent-Type: application/json\r\n",
+            'content' => '{}',
+            'timeout' => 3,
+            'ignore_errors' => true,
+        ],
+    ]);
+    $response = @file_get_contents('https://varka.kz/api/verify', false, $context);
+    $data = $response !== false ? json_decode($response, true) : null;
+
+    $session = null;
+    if (is_array($data) && !empty($data['permissions'])) {
+        $level = 'none';
+        foreach ($data['permissions'] as $p) {
+            if (($p['project_code'] ?? '') === 'manufacture') { $level = $p['level']; break; }
+        }
+        if ($level === 'admin') {
+            $session = [
+                'token'      => $token,
+                'role_id'    => null,
+                'login'      => $data['email'] ?? ('portal:' . $data['user_id']),
+                'name'       => $data['full_name'] ?? ($data['email'] ?? 'Портал'),
+                'is_admin'   => 1,
+                'expires_at' => $now + 60 * 60 * 24 * 7,
+            ];
+        }
+    }
+
+    // Кэшируем и отрицательный результат — иначе невалидный/недостаточный
+    // токен будет бить по сети на каждый запрос.
+    $db->prepare('INSERT INTO portal_verify_cache (token, session_json, expires_at) VALUES (?, ?, ?)
+                  ON DUPLICATE KEY UPDATE session_json = VALUES(session_json), expires_at = VALUES(expires_at)')
+       ->execute([$token, json_encode($session), $now + 60]);
+
+    return $session;
 }
 
 // Жёсткая проверка: 401 без сессии, 403 если нужен админ, а сессия не админская.

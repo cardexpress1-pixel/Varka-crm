@@ -2719,7 +2719,15 @@ function getMondayOf(date) {
   return fmtDate(addDays(d, diff));
 }
 
-function getRoleById(id) { return state.roles.find(r => r.id === id); }
+// _ssoRole — синтетическая роль SSO-сессии портала (см. trySso() ниже).
+// Намеренно НЕ часть state.roles: state.roles уходит на сервер при
+// saveState()/POST api/state, а эта роль — только для локального рендера
+// текущего пользователя, реального role_id в БД у неё нет.
+let _ssoRole = null;
+function getRoleById(id) {
+  if (_ssoRole && id === _ssoRole.id) return _ssoRole;
+  return state.roles.find(r => r.id === id);
+}
 
 // Светлая/тёмная тема — общая настройка устройства (не привязана к роли),
 // сохраняется в state и применяется сразу при загрузке, до входа в систему.
@@ -3348,6 +3356,32 @@ function applySidebarState() {
   try { collapsed = localStorage.getItem('varka_sidebar_collapsed') || '0'; } catch(e) {}
   layout.classList.toggle('sidebar-collapsed', collapsed === '1');
   updateSidebarEdgeBtn(collapsed === '1');
+}
+
+// SSO поверх локального логина (шаг 5 ТЗ, не заменяет его). Portal (varka.kz)
+// и Manufacture (varka.kz/manufacture) — общий origin с переезда на пути,
+// поэтому portal_token из sessionStorage портала уже доступен этой странице
+// напрямую, без обмена токеном между проектами. Вызывается из INIT ниже,
+// только если tryRestoreSession() не нашёл локальную сессию Manufacture —
+// локальный логин в приоритете, SSO — запасной путь.
+const SSO_ROLE_ID = '__portal_sso__';
+async function trySso() {
+  const portalToken = sessionStorage.getItem('portal_token');
+  if (!portalToken) return false;
+  try {
+    const res = await fetch(API_BASE + '/whoami', {
+      headers: { Authorization: 'Bearer ' + portalToken },
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data.role) return false;
+    _ssoRole = { ...data.role, id: SSO_ROLE_ID };
+    authToken = portalToken;
+    currentUser = { roleId: SSO_ROLE_ID, loginAt: Date.now() };
+    return true;
+  } catch (e) {
+    return false; // портал недоступен/офлайн — остаёмся на локальном логине
+  }
 }
 
 // Аудит безопасности §1: TTL сессии — 12 часов (рабочая смена с запасом). Без loginAt
@@ -8394,7 +8428,9 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 (async () => {
   await initFirebase(); // ping api/report — доступен ли сервер
   // Сессию восстанавливаем ДО loadState: серверное состояние читается только с токеном.
-  const restored = tryRestoreSession();
+  // Локальный логин Manufacture в приоритете; SSO портала — только если своей сессии нет.
+  let restored = tryRestoreSession();
+  if (!restored) restored = await trySso();
   await loadState(); // с токеном — с сервера; без — localStorage-кэш (логотип/тема для экрана входа)
   applyTheme();
   document.getElementById('loading-screen').style.display = 'none';
