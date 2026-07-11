@@ -2484,18 +2484,21 @@ const CONFIGURABLE_FIELDS = [
   ['dateNavIntake', 'Отображать дату'],
 ];
 
+// Аудит безопасности — быстрая мера (не архитектурный фикс, см. SECURITY.md «Этап 2»):
+// дефолтные пароли больше не совпадают с логином. Применяется только к НОВЫМ ролям /
+// сбросу через «Сбросить роли к стандартным» — существующие роли в боевой БД не меняет.
 function defaultRoles() {
   return [
-    { id:'admin', name:'Админ', login:'admin', password:'admin',
+    { id:'admin', name:'Админ', login:'admin', password:'ZLFGd6EN',
       tabs: ALL_TABS.map(t=>t[0]),
       fields: { client:true, note:true, priority:true } },
-    { id:'operator', name:'Оператор производства', login:'operator', password:'operator',
+    { id:'operator', name:'Оператор производства', login:'operator', password:'PZft746E',
       tabs: ['dashboard','production','weekplan','calendar','reports','journal'],
       fields: { client:true, note:true, priority:true } },
-    { id:'warshchik', name:'Участок варки', login:'warshchik', password:'warshchik',
+    { id:'warshchik', name:'Участок варки', login:'warshchik', password:'wUsyGPim',
       tabs: ['warshchik'],
       fields: { client:false, note:true, priority:true, dateNavWarshchik:true, dateNavIntake:true } },
-    { id:'intake', name:'Участок розлива', login:'intake', password:'intake',
+    { id:'intake', name:'Участок розлива', login:'intake', password:'cwr69UQD',
       tabs: ['intake'],
       fields: { client:false, note:true, priority:false, dateNavWarshchik:true, dateNavIntake:true } },
   ];
@@ -6995,6 +6998,15 @@ function previewBranding() {}
 function uploadBrandingLogo(input) {
   const file = input.files[0];
   if (!file) return;
+  // Аудит безопасности §3: без лимита файл в base64 (+~33% размера) уходит в
+  // state.companyLogo и в единый документ Firestore (лимит 1 МиБ на весь документ) —
+  // раздутие ломает saveState() для всех пользователей разом, не только для того, кто грузил.
+  const MAX_LOGO_BYTES = 250 * 1024;
+  if (file.size > MAX_LOGO_BYTES) {
+    showToast(`Файл слишком большой (${Math.round(file.size/1024)} КБ) — максимум 250 КБ`);
+    input.value = '';
+    return;
+  }
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
