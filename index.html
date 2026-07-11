@@ -1435,31 +1435,6 @@
 @media(max-width:1100px){#page-dashboard .dash-pulse{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:640px){#page-dashboard .dash-pulse{grid-template-columns:repeat(2,1fr);}}
 #page-dashboard .dash-flow{margin-bottom:16px;}
-#page-dashboard .dflow-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
-#page-dashboard .dflow-empty{padding:22px;text-align:center;color:var(--text2);font-size:13px;}
-#page-dashboard .dflow-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
-#page-dashboard .dflow-lbl{font-size:13px;color:var(--text2);font-weight:600;}
-#page-dashboard .dflow-lbl b{color:var(--text);font-weight:800;font-size:15px;}
-#page-dashboard .dflow-sum{font-size:13px;font-weight:700;color:var(--text2);}
-#page-dashboard .dflow-bar{height:52px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);display:flex;gap:3px;overflow:hidden;}
-#page-dashboard .dseg{height:100%;display:flex;flex-direction:column;justify-content:center;padding:0 16px;min-width:0;transition:width .8s cubic-bezier(.4,0,.2,1);}
-#page-dashboard .dseg b{font-size:17px;font-weight:800;line-height:1;}
-#page-dashboard .dseg span{font-size:11px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-#page-dashboard .dseg-out{background:linear-gradient(135deg,#10b981,#34d399);color:#06251b;}
-#page-dashboard .dseg-wait{background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#3a2708;}
-#page-dashboard .dflow-leg{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text2);}
-#page-dashboard .dflow-leg i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle;}
-#page-dashboard .dflow-leg b{color:var(--text);font-weight:700;}
-#page-dashboard .dflow-delays{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
-#page-dashboard .dflow-a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);}
-#page-dashboard .dflow-a.over{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border-color:color-mix(in srgb,var(--danger) 32%,var(--border));}
-#page-dashboard .dflow-adot{width:9px;height:9px;border-radius:50%;flex:none;}
-#page-dashboard .dflow-atx{font-size:13px;font-weight:600;min-width:0;}
-#page-dashboard .dflow-atx small{display:block;font-size:11px;color:var(--text2);font-weight:500;margin-top:2px;}
-#page-dashboard .dflow-aw{margin-left:auto;font-size:12px;font-weight:700;white-space:nowrap;}
-#page-dashboard .dflow-ok{display:flex;align-items:center;gap:9px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);font-size:13px;color:var(--text2);font-weight:600;}
-#page-dashboard .dflow-ok i{width:9px;height:9px;border-radius:50%;display:inline-block;}
-@media(prefers-reduced-motion:reduce){#page-dashboard .dseg{transition:none;}}
 #page-dashboard .dash-tanks{display:flex;gap:14px;flex-wrap:wrap;padding:8px 2px 4px;}
 #page-dashboard .dash-tank{flex:1;min-width:72px;display:flex;flex-direction:column;align-items:center;gap:7px;}
 #page-dashboard .dash-tank-cyl{width:100%;max-width:78px;height:104px;border-radius:13px;background:var(--surface2);border:1px solid var(--border);position:relative;overflow:hidden;display:flex;align-items:flex-end;}
@@ -1470,14 +1445,9 @@
 #page-dashboard .dash-tank.idle .dash-tank-done{color:var(--text3);}
 #page-dashboard .dash-tank-s{font-size:11px;color:var(--text2);font-weight:600;max-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
 #page-dashboard .dash-tank.idle .dash-tank-s{color:var(--text3);}
-#page-dashboard .dash-prod-wrap{display:flex;gap:22px;align-items:center;}
-#page-dashboard .dash-prod-ring{flex:none;}
-#page-dashboard .dash-prod-tblwrap{flex:1;min-width:0;overflow-x:auto;}
 #page-dashboard .dpr-v{fill:var(--text);font-size:23px;font-weight:800;}
 #page-dashboard .dpr-k{fill:var(--text2);font-size:9px;font-weight:600;}
-@media(max-width:640px){#page-dashboard .dash-prod-wrap{flex-direction:column;align-items:stretch;}}
 @media(prefers-reduced-motion:reduce){#page-dashboard .dash-tank-fill{transition:none;}}
-#page-dashboard .dash-prod-swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:middle;}
 #page-dashboard .dash-kt{border-radius:20px;padding:16px 17px;color:#fff;position:relative;overflow:hidden;box-shadow:0 14px 34px -18px rgba(0,0,0,.55);min-width:0;}
 #page-dashboard .dash-kt-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:13px;}
 #page-dashboard .dash-kt-lbl{font-size:12px;font-weight:600;letter-spacing:.02em;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -1547,52 +1517,16 @@
 #page-dashboard .db-ok-dot{width:9px;height:9px;border-radius:50%;background:var(--accent2);}
 @keyframes dbGrowY{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 @media(prefers-reduced-motion:reduce){#page-dashboard .db-lrow .tr>i,#page-dashboard .db-stacked>span,#page-dashboard .db-day-bar{animation:none;}}
-/* Реакторы (Уровень 2) — компактный список-таблица */
-#page-dashboard .dash-rl-wrap{margin-bottom:16px;padding:14px 18px;}
-#page-dashboard .dash-rl-scroll{overflow-x:auto;}
-#page-dashboard .dash-rl-row{display:grid;grid-template-columns:118px 118px minmax(0,1fr) 54px 132px 130px;align-items:center;gap:12px;min-width:620px;}
-#page-dashboard .dash-rl-head{padding:6px 0 10px;border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);}
-#page-dashboard .dash-rl-r{padding:10px 0;border-bottom:1px solid var(--border);}
-#page-dashboard .dash-rl-r:last-child{border-bottom:0;}
-#page-dashboard .dash-rl-rc{display:flex;align-items:center;gap:9px;min-width:0;}
-#page-dashboard .dash-rl-badge{width:28px;height:28px;border-radius:8px;color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-#page-dashboard .dash-rl-name{font-size:14px;font-weight:800;}
-#page-dashboard .dash-rl-pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;}
-#page-dashboard .dash-rl-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-#page-dashboard .dash-rl-prod{font-size:13px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#page-dashboard .dash-rl-num{text-align:right;font-size:13px;font-weight:700;color:var(--text);}
-#page-dashboard .dash-rl-out{text-align:right;font-size:13px;}
-#page-dashboard .dash-rl-out b{font-weight:800;color:var(--text);}
-#page-dashboard .dash-rl-out span{color:var(--text3);font-size:11.5px;}
-#page-dashboard .dash-rl-load{display:flex;align-items:center;gap:8px;}
-#page-dashboard .dash-rl-bar{flex:1;height:7px;background:var(--surface2);border-radius:5px;overflow:hidden;}
-#page-dashboard .dash-rl-bar>i{display:block;height:100%;border-radius:5px;}
-#page-dashboard .dash-rl-lh{font-size:11.5px;color:var(--text2);white-space:nowrap;min-width:38px;text-align:right;}
-#page-dashboard .dash-rl-r.idle .dash-rl-prod,#page-dashboard .dash-rl-r.idle .dash-rl-num,#page-dashboard .dash-rl-r.idle .dash-rl-out{color:var(--text3);}
-#page-dashboard .dash-rl-r.idle .dash-rl-name{color:var(--text2);}
 /* week day tiles */
 #page-dashboard .dash-week-nav{display:flex;align-items:center;gap:8px;}
 #page-dashboard .dash-wk-label{font-size:12.5px;color:var(--text2);font-weight:600;min-width:150px;text-align:center;}
 #page-dashboard .dash-days{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;}
 #page-dashboard .dash-day{display:flex;flex-direction:column;align-items:center;gap:8px;}
-#page-dashboard .dash-day-val{font-size:14px;font-weight:800;color:var(--text);line-height:1;}
-#page-dashboard .dash-day-val span{font-size:10px;font-weight:600;color:var(--text3);margin-left:2px;}
-#page-dashboard .dash-day-tile{width:100%;height:118px;background:var(--surface2);border:1px solid var(--border);border-radius:14px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:6px;}
-#page-dashboard .dash-day-fill{width:100%;border-radius:10px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#000));transition:height .5s cubic-bezier(.22,1,.36,1);}
-#page-dashboard .dash-day-tile.is-today{outline:2px solid var(--accent);outline-offset:2px;}
-#page-dashboard .dash-day-pct{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:11px;font-weight:800;z-index:2;}
-#page-dashboard .dash-day-name{font-size:12.5px;font-weight:600;color:var(--text2);}
 #page-dashboard .dash-week-sum{display:flex;gap:22px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap;}
 #page-dashboard .dash-ws{font-size:12px;color:var(--text2);}
 #page-dashboard .dash-ws b{display:block;font-size:17px;font-weight:800;color:var(--text);margin-top:2px;}
 /* месячный тренд выпуска (горизонт «Месяц») */
 #page-dashboard .dash-mt{display:flex;align-items:stretch;gap:3px;height:140px;overflow-x:auto;padding-bottom:2px;}
-#page-dashboard .dash-mt-day{flex:1 0 13px;min-width:13px;display:flex;flex-direction:column;align-items:center;}
-#page-dashboard .dash-mt-track{flex:1;width:100%;display:flex;align-items:flex-end;}
-#page-dashboard .dash-mt-bar{width:100%;border-radius:4px 4px 2px 2px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#000));transition:height .4s cubic-bezier(.22,1,.36,1);}
-#page-dashboard .dash-mt-bar.is-best{background:linear-gradient(180deg,var(--accent2),color-mix(in srgb,var(--accent2) 72%,#000));}
-#page-dashboard .dash-mt-bar.is-today{outline:2px solid var(--accent);outline-offset:1px;}
-#page-dashboard .dash-mt-num{font-size:9px;color:var(--text3);font-weight:600;margin-top:5px;height:11px;line-height:11px;}
 /* reactor load bars */
 #page-dashboard .dash-rbar{display:grid;grid-template-columns:minmax(64px,auto) 1fr 44px;align-items:center;gap:11px;margin-bottom:12px;}
 #page-dashboard .dash-rbar:last-child{margin-bottom:0;}
@@ -1604,29 +1538,11 @@
 /* Линии розлива — компактный список, единый стиль с реакторами (.dash-rl-*) */
 #page-dashboard .dash-ll-row{display:grid;grid-template-columns:minmax(0,1fr) 100px 74px 104px 148px;align-items:center;gap:12px;min-width:560px;}
 #page-dashboard .dash-ll-sq{width:12px;height:12px;border-radius:4px;flex-shrink:0;}
-/* Продукты (Уровень 3) — таблица по SKU */
-#page-dashboard #bi-products{overflow-x:auto;}
-#page-dashboard .dash-prod-tbl{width:100%;border-collapse:collapse;font-size:13px;}
-#page-dashboard .dash-prod-tbl th{text-align:left;font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.03em;padding:0 12px 11px;border-bottom:1px solid var(--border);white-space:nowrap;}
-#page-dashboard .dash-prod-tbl th.num,#page-dashboard .dash-prod-tbl td.num{text-align:right;}
-#page-dashboard .dash-prod-tbl td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle;}
-#page-dashboard .dash-prod-name{font-size:13px;font-weight:700;color:var(--text);}
-#page-dashboard .dash-prod-sku{font-size:11px;color:var(--text3);font-weight:500;margin-top:1px;}
-#page-dashboard .dash-prod-kg{font-weight:800;color:var(--text);}
-#page-dashboard .dash-prod-pcs{font-size:11.5px;color:var(--text3);white-space:nowrap;}
-#page-dashboard .dash-prod-share{display:inline-flex;align-items:center;gap:9px;}
-#page-dashboard .dash-prod-sbar{width:56px;height:6px;border-radius:4px;background:var(--surface2);overflow:hidden;flex-shrink:0;}
-#page-dashboard .dash-prod-sbar>i{display:block;height:100%;border-radius:4px;background:var(--accent);}
-#page-dashboard .dash-prod-sval{font-weight:800;min-width:40px;text-align:right;}
-#page-dashboard .dash-prod-reactors{display:flex;flex-wrap:wrap;gap:5px;}
-#page-dashboard .dash-prod-rtag{font-size:11px;font-weight:800;color:#fff;padding:2px 8px;border-radius:7px;white-space:nowrap;}
-#page-dashboard .dash-prod-tbl tfoot td{padding-top:13px;border-top:2px solid var(--border);border-bottom:0;font-weight:800;color:var(--text);}
-@media(max-width:640px){#page-dashboard .dash-prod-sbar{display:none;}#page-dashboard .dash-prod-tbl th,#page-dashboard .dash-prod-tbl td{padding-left:8px;padding-right:8px;}}
 #page-dashboard .dash-empty{padding:22px;text-align:center;font-size:13px;color:var(--text3);}
 body.theme-light #page-dashboard .dash-card,
 body.theme-light #page-dashboard .dash-kpi,
 body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,30,60,.06), 0 1px 2px rgba(20,30,60,.04);}
-@media(max-width:560px){#page-dashboard .dash-days{gap:6px;}#page-dashboard .dash-day-tile{height:90px;}#page-dashboard .dash-day-val{font-size:12px;}}
+@media(max-width:560px){#page-dashboard .dash-days{gap:6px;}}
 </style>
 <div class="page page-wide" id="page-dashboard">
 
@@ -4458,122 +4374,6 @@ function renderDashboard() {
 // BI АНАЛИТИКА
 // ════════════════════════════════════════════════════════════════════════════
 
-// Уровень 2 «Реакторы» — компактный список-таблица (строка на реактор).
-// День: live-статус (Варит/Розлив/Ожидание/Простой) + время варки в тултипе.
-// Неделя/Месяц: агрегат за окно (Работал/Простой, топ-SKU, варок/выпуск/загрузка).
-// Реакторы как танки-гейджи: уровень заливки = доля ВЫПОЛНЕННОГО по реактору за период
-// (выпущено / сварено по объёму). Пустой танк = реактор не задействован. Дашборд «выполнено/не выполнено».
-function renderReactorCards(range) {
-  const el = document.getElementById('dash-reactor-cards');
-  if (!el) return;
-  range = range || dashRange();
-  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
-  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
-  const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
-  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
-  if (!state.reactors.length) { el.innerHTML = `<div class="dash-empty">Нет реакторов</div>`; return; }
-
-  const brewedStages = new Set(['brewed', 'pouring', 'poured', 'finished']);
-  let workingCount = 0;
-  const tanks = state.reactors.map((r, i) => {
-    const rb = state.batches.filter(b => b.reactor === r && b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
-    const brewedB   = rb.filter(b => brewedStages.has(getBatchStage(b)));
-    const releasedB = brewedB.filter(b => b.factQty != null);
-    const brewedKg   = brewedB.reduce((s, b) => s + volOf(b), 0);
-    const releasedKg = releasedB.reduce((s, b) => s + volOf(b), 0);
-    const done = brewedKg > 0 ? Math.min(100, Math.round(releasedKg / brewedKg * 100)) : 0;
-    const active = rb.length > 0;
-    if (active) workingCount++;
-    const bySku = {}; rb.forEach(b => { const k = b.name || b.sku || '—'; bySku[k] = (bySku[k] || 0) + 1; });
-    const skus = Object.keys(bySku).sort((a, b) => bySku[b] - bySku[a]);
-    const prod = skus.length ? (skus.length > 1 ? `${skus[0]} +${skus.length - 1}` : skus[0]) : 'простой';
-    const fillCol = done >= 100 ? 'linear-gradient(180deg,#34d399,#10b981)' : 'linear-gradient(180deg,#3b82f6,#2563eb)';
-    return { r, rc: (i % 8) + 1, active, done, brewedKg, releasedKg, prod, fillCol };
-  });
-
-  el.innerHTML = `<div class="dash-tanks">` + tanks.map(t => {
-    if (!t.active) {
-      return `<div class="dash-tank idle">
-        <div class="dash-tank-cyl"></div>
-        <span class="dash-tank-badge" style="background:var(--r${t.rc});opacity:.5">${t.r}</span>
-        <div class="dash-tank-done">—</div>
-        <div class="dash-tank-s">простой</div>
-      </div>`;
-    }
-    const h = Math.max(t.done > 0 ? 10 : 3, t.done);
-    return `<div class="dash-tank" title="${t.r}: сварено ${nf(t.brewedKg)} кг · выпущено ${nf(t.releasedKg)} кг">
-      <div class="dash-tank-cyl"><div class="dash-tank-fill" style="height:${h}%;background:${t.fillCol}"></div></div>
-      <span class="dash-tank-badge" style="background:var(--r${t.rc})">${t.r}</span>
-      <div class="dash-tank-done" style="color:${t.done >= 100 ? 'var(--accent2)' : 'var(--text)'}">${t.done}%</div>
-      <div class="dash-tank-s" title="${t.prod}">${t.prod}</div>
-    </div>`;
-  }).join('') + `</div>`;
-
-  const badge = document.getElementById('dash-reactors-badge');
-  if (badge) badge.textContent = workingCount + ' из ' + state.reactors.length + ' задействовано';
-}
-
-// Уровень 3 «Продукты» — таблица по SKU за период: варок, выпуск (кг/шт), % от итога, реакторы.
-// Доля считается по ОБЪЁМУ (кг) — тара-нейтрально, как план/факт в Уровнях 1–2; штуки показываем рядом.
-function renderProducts(doneBatches) {
-  const el = document.getElementById('bi-products');
-  if (!el) return;
-  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
-  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
-  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
-
-  const bySku = {};
-  doneBatches.forEach(b => {
-    const key = b.sku || b.name || '—';
-    if (!bySku[key]) bySku[key] = { sku: b.sku || '', name: b.name || b.sku || '—', count: 0, qty: 0, kg: 0, reactors: new Set() };
-    const g = bySku[key];
-    g.count++;
-    g.qty += b.factQty || 0;
-    g.kg  += (b.factQty || 0) * taraOf(b);
-    if (b.reactor) g.reactors.add(b.reactor);
-  });
-  const rows = Object.values(bySku).sort((a, b) => b.kg - a.kg);
-
-  if (!rows.length) {
-    el.innerHTML = `<div class="dash-empty">Нет завершённых варок за период</div>`;
-    return;
-  }
-
-  const totKg = rows.reduce((s, r) => s + r.kg, 0);
-  const totQty = rows.reduce((s, r) => s + r.qty, 0);
-  const body = rows.map((r, i) => `<tr>
-      <td><div class="dash-prod-name"><span class="dash-prod-swatch" style="background:var(--r${(i % 8) + 1})"></span>${r.name}</div>${r.sku ? `<div class="dash-prod-sku">${r.sku}</div>` : ''}</td>
-      <td class="num"><span class="dash-prod-kg">${nf(r.kg)}</span> <span class="dash-prod-pcs">кг · ${nf(r.qty)} шт</span></td>
-    </tr>`).join('');
-
-  const RR = 47, CC = 2 * Math.PI * RR;
-  let ringOff = 0;
-  const ringSegs = rows.map((r, i) => {
-    const len = totKg ? (r.kg / totKg) * CC : 0;
-    const seg = `<circle cx="60" cy="60" r="${RR}" fill="none" stroke="var(--r${(i % 8) + 1})" stroke-width="15" stroke-dasharray="${len.toFixed(1)} ${(CC - len).toFixed(1)}" stroke-dashoffset="${(-ringOff).toFixed(1)}"></circle>`;
-    ringOff += len;
-    return seg;
-  }).join('');
-  const donut = `<div class="dash-prod-ring">
-    <svg viewBox="0 0 120 120" width="122" height="122" role="img" aria-label="Кольцо выпуска по продуктам">
-      <g transform="rotate(-90 60 60)">${ringSegs}</g>
-      <text x="60" y="56" text-anchor="middle" class="dpr-v">${nf(totQty)}</text>
-      <text x="60" y="74" text-anchor="middle" class="dpr-k">шт выпущено</text>
-    </svg>
-  </div>`;
-
-  const table = `<table class="dash-prod-tbl">
-    <thead><tr><th>Продукт</th><th class="num">Выпущено</th></tr></thead>
-    <tbody>${body}</tbody>
-    <tfoot><tr>
-      <td>ИТОГО</td>
-      <td class="num"><span class="dash-prod-kg">${nf(totKg)}</span> <span class="dash-prod-pcs">кг · ${nf(totQty)} шт</span></td>
-    </tr></tfoot>
-  </table>`;
-
-  el.innerHTML = `<div class="dash-prod-wrap">${donut}<div class="dash-prod-tblwrap">${table}</div></div>`;
-}
-
 // Уровень 1 «Пульс дня» — 5 фактических показателей по окну горизонта (День/Неделя/Месяц).
 // Логика сварено/выпущено: варка проходит стадии … brewed → pouring → poured → finished.
 //   Сварено   = объём варок, у которых варка ЗАВЕРШЕНА (стадия brewed и дальше) — продукт физически сварен.
@@ -4809,74 +4609,6 @@ function renderDashBrewed(range) {
     ? `<div class="db-empty">Нет сваренной продукции за период</div>`
     : `<div class="db-bd">` + rows.map(r => `<div class="db-bar"><span class="nm" title="${r.name}">${r.name}</span><span class="tr"><i style="width:${Math.max(2, Math.round(r.kg / maxKg * 100))}%;background:linear-gradient(90deg,#2563eb,#22d3ee)"></i></span><span class="vl">${nf(r.kg)} кг</span></div>`).join('') + `</div>`;
   el.innerHTML = `<div class="db-card" style="--dbc:#3b82f6">${head}${body}</div>`;
-}
-
-// «Поток продукции» — Сварено = Выпущено (выполнено) + Ожидает розлива (не выполнено) + детектор задержек.
-// Разбивка по ОБЪЁМУ (кг), чтобы доли складывались в 100%. brewedB = сварено; из них с factQty — выпущено, без — ожидает.
-function renderDashFlow(range) {
-  const el = document.getElementById('dash-flow');
-  if (!el) return;
-  range = range || dashRange();
-  const recBySku = {}; (state.recipes || []).forEach(r => { if (r && r.sku) recBySku[r.sku] = r; });
-  const taraOf = b => (b.tara != null ? b.tara : (recBySku[b.sku] ? recBySku[b.sku].tara : 0)) || 0;
-  const volOf  = b => (b.volume != null && b.volume > 0) ? b.volume : (b.planQty || 0) * taraOf(b);
-  const nf = n => Math.round(n || 0).toLocaleString('ru-RU');
-  const tf = kg => ((kg || 0) / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
-  const pluVar = n => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? 'варок' : (b === 1 ? 'варка' : (b >= 2 && b <= 4 ? 'варки' : 'варок')); };
-
-  const pb = state.batches.filter(b => b.brewDate >= range.start && b.brewDate <= range.end && b.status !== 'deleted' && b.status !== 'cancelled');
-  const brewedStages = new Set(['brewed', 'pouring', 'poured', 'finished']);
-  const brewedB   = pb.filter(b => brewedStages.has(getBatchStage(b)));
-  const releasedB = brewedB.filter(b => b.factQty != null);
-  const awaitingB = brewedB.filter(b => b.factQty == null);
-
-  const outKg  = releasedB.reduce((s,b) => s + volOf(b), 0);
-  const waitKg = awaitingB.reduce((s,b) => s + volOf(b), 0);
-  const totKg  = outKg + waitKg;
-  const outQty = releasedB.reduce((s,b) => s + (b.factQty || 0), 0);
-
-  if (totKg <= 0) { el.innerHTML = `<div class="dflow-card dflow-empty">Нет сваренной продукции за период</div>`; return; }
-  const outPct  = Math.round(outKg / totKg * 100);
-  const waitPct = 100 - outPct;
-
-  const now = new Date();
-  const waitMsOf = b => {
-    const end = b.brewEndedAt ? new Date(b.brewEndedAt) : new Date((b.brewDate || range.end) + 'T23:59:59');
-    return now - end;
-  };
-  const OVERDUE = 24 * 3600 * 1000;
-  const fmtWait = ms => { if (ms < 0) ms = 0; const h = ms / 3600000; return h < 24 ? Math.max(1, Math.round(h)) + ' ч' : Math.round(h / 24) + ' дн'; };
-  const nameOf = b => (b.name || (recBySku[b.sku] && recBySku[b.sku].name) || b.sku || 'Варка');
-  const delays = awaitingB.map(b => ({ b, ms: waitMsOf(b) })).filter(x => x.ms > 0).sort((a,c) => c.ms - a.ms).slice(0, 5);
-
-  const bar = `<div class="dflow-bar">
-    ${outPct  > 0 ? `<div class="dseg dseg-out" style="width:${outPct}%"><b>${tf(outKg)} т</b><span>Выпущено · ${outPct}%</span></div>` : ''}
-    ${waitPct > 0 ? `<div class="dseg dseg-wait" style="width:${waitPct}%"><b>${tf(waitKg)} т</b><span>Ожидает · ${waitPct}%</span></div>` : ''}
-  </div>`;
-
-  const legend = `<div class="dflow-leg">
-    <span><i style="background:#10b981"></i>Выполнено — розлив закрыт: <b>${tf(outKg)} т</b> · ${nf(outQty)} шт</span>
-    <span><i style="background:#f59e0b"></i>Не выполнено — ожидает розлива: <b>${tf(waitKg)} т</b> · ${awaitingB.length} ${pluVar(awaitingB.length)}</span>
-  </div>`;
-
-  let tail = '';
-  if (delays.length) {
-    tail = `<div class="dflow-delays">` + delays.map(x => {
-      const over = x.ms > OVERDUE, col = over ? 'var(--danger)' : 'var(--warn)';
-      return `<div class="dflow-a${over ? ' over' : ''}">
-        <span class="dflow-adot" style="background:${col}"></span>
-        <span class="dflow-atx">${nameOf(x.b)}<small>Ожидает розлива${x.b.reactor ? ' · ' + x.b.reactor : ''}</small></span>
-        <span class="dflow-aw" style="color:${col}">${fmtWait(x.ms)}${over ? ' · просрочка' : ''}</span>
-      </div>`;
-    }).join('') + `</div>`;
-  } else if (waitKg <= 0) {
-    tail = `<div class="dflow-ok"><i style="background:var(--accent2)"></i>Вся сваренная продукция выпущена — задержек нет</div>`;
-  }
-
-  el.innerHTML = `<div class="dflow-card">
-    <div class="dash-card-h"><div class="dash-card-t"><span class="dash-h-bar" style="background:var(--accent)"></span>Выполнение розлива</div><span class="dash-badge">${tf(totKg)} т сварено</span></div>
-    ${bar}${legend}${tail}
-  </div>`;
 }
 
 function renderBiAnalytics() {
