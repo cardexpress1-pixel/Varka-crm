@@ -5890,7 +5890,9 @@ function renderIntake() {
   if (isPourOperatorRole() && state.filterPouringLine && state.filterPouringLine !== 'all') state.filterPouringLine = 'all';
 
   const currentRoleForNav = getRoleById(currentUser.roleId);
-  const showDateNav = !currentRoleForNav || currentRoleForNav.fields.dateNavIntake !== false;
+  // Оператор розлива — без выбора даты вообще (только сегодня), симметрично варщику. Для остальных — по настройке роли.
+  const showDateNav = isPourOperatorRole() ? false
+    : (!currentRoleForNav || currentRoleForNav.fields.dateNavIntake !== false);
   const dateNavEl = document.getElementById('intake-date-nav');
   if (dateNavEl) dateNavEl.style.display = showDateNav ? 'flex' : 'none';
   // если выбор даты скрыт админом, принудительно показываем всю очередь —
