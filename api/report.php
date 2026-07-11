@@ -4,8 +4,7 @@
 // прямого доступа к БД у портала нет). Отдаёт только обезличенные агрегаты —
 // никаких имён, логинов, рецептур и журналов.
 require_once __DIR__ . '/storage.php';
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+apiHeaders('GET', '*'); // публичный обезличенный агрегат; OPTIONS-preflight обработан
 header('Cache-Control: public, max-age=60');
 
 $row = pdo()->query('SELECT data, rev, updated_at FROM app_state WHERE id = 1')->fetch();

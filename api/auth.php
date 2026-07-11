@@ -15,10 +15,12 @@ if ($login === '' || $password === '') {
     http_response_code(400); echo json_encode(['error' => 'Введите логин и пароль']); exit;
 }
 
-// 10 попыток / 15 минут с одного IP (тот же лимит, что у Tracker).
-if (!checkRateLimit('login', clientIp(), 10, 900)) {
+// Лимит считает только НЕУДАЧНЫЕ попытки: 10 промахов / 15 минут с одного IP.
+// Успешные входы лимит не расходуют — иначе смена за одним NAT-IP (весь цех
+// через общий выход в интернет) заблокировала бы сама себя при обычном входе.
+if (failedAttempts('login', clientIp(), 900) >= 10) {
     http_response_code(429);
-    echo json_encode(['error' => 'Слишком много попыток входа, попробуйте позже']);
+    echo json_encode(['error' => 'Слишком много неудачных попыток входа, попробуйте позже']);
     exit;
 }
 
@@ -26,8 +28,9 @@ $q = pdo()->prepare("SELECT * FROM roles WHERE login = ? AND status = 'active'")
 $q->execute([$login]);
 $role = $q->fetch();
 
-if (!$role || !password_verify($password, $role['password_hash'])) {
+if (!$role || $role['password_hash'] === '' || !password_verify($password, $role['password_hash'])) {
     logLoginAttempt($login, false);
+    recordFailure('login', clientIp());
     http_response_code(401);
     echo json_encode(['error' => 'Неверный логин или пароль']);
     exit;
@@ -36,11 +39,12 @@ if (!$role || !password_verify($password, $role['password_hash'])) {
 logLoginAttempt($login, true);
 $token = createSession($role);
 
+$tabs = json_decode($role['tabs'] ?? '[]', true) ?: [];
 echo json_encode(['token' => $token, 'role' => [
     'id'         => $role['id'],
     'name'       => $role['name'],
     'login'      => $role['login'],
-    'fullAccess' => (bool)$role['full_access'],
-    'tabs'       => json_decode($role['tabs'] ?? '[]', true) ?: [],
+    'fullAccess' => (bool)$role['is_admin'], // историческое поле клиента
+    'tabs'       => $tabs,
     'fields'     => json_decode($role['fields'] ?? '{}', true) ?: (object)[],
 ]], JSON_UNESCAPED_UNICODE);

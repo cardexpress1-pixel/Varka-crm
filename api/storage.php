@@ -4,6 +4,15 @@
 // JSON-файлов: это и есть миграция с Firebase Firestore (ТЗ, лист 1 и 7).
 require_once __DIR__ . '/config.php';
 
+// Признак «админа» в этом приложении — доступ к вкладке 'admin' (админ-панель,
+// где редактируются роли). Флага fullAccess у боевых ролей нет; источник правды —
+// наличие этой вкладки. См. syncRolesFromState() и requireAuth().
+const ADMIN_TAB = 'admin';
+
+// Исключение бизнес-правила: эндпоинт ловит его и отдаёт HTTP-код сам,
+// storage-слой не печатает ответ и не делает exit (пригоден и для CLI-импорта).
+class ApiRuleException extends RuntimeException {}
+
 function pdo(): PDO {
     static $pdo = null;
     if ($pdo === null) {
@@ -18,8 +27,14 @@ function pdo(): PDO {
     return $pdo;
 }
 
-// Типы колонок без JSON-типа — чтобы работать одинаково на MySQL 5.7+ и MariaDB.
+// Схема создаётся один раз: флаг-файл рядом с data-каталогом снимает 6× DDL
+// с КАЖДОГО запроса (включая опрос /state и публичный /report). Удалите файл
+// .schema_ok, если поменяли DDL и нужно пересоздать/дополнить таблицы.
 function bootstrapSchema(PDO $pdo): void {
+    $flag = __DIR__ . '/.schema_ok';
+    if (file_exists($flag)) return;
+
+    // Типы колонок без JSON-типа — чтобы работать одинаково на MySQL 5.7+ и MariaDB.
     $pdo->exec("CREATE TABLE IF NOT EXISTS app_state (
         id TINYINT NOT NULL PRIMARY KEY,
         data LONGTEXT NOT NULL,
@@ -36,7 +51,7 @@ function bootstrapSchema(PDO $pdo): void {
         name VARCHAR(190) NOT NULL,
         login VARCHAR(64) NOT NULL,
         password_hash VARCHAR(255) NOT NULL DEFAULT '',
-        full_access TINYINT(1) NOT NULL DEFAULT 0,
+        is_admin TINYINT(1) NOT NULL DEFAULT 0,
         tabs MEDIUMTEXT NULL,
         fields MEDIUMTEXT NULL,
         email VARCHAR(190) NULL,
@@ -51,7 +66,7 @@ function bootstrapSchema(PDO $pdo): void {
         token CHAR(64) NOT NULL PRIMARY KEY,
         role_id VARCHAR(64) NOT NULL,
         login VARCHAR(64) NOT NULL,
-        full_access TINYINT(1) NOT NULL DEFAULT 0,
+        is_admin TINYINT(1) NOT NULL DEFAULT 0,
         expires_at INT UNSIGNED NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         KEY idx_expires (expires_at)
@@ -80,13 +95,15 @@ function bootstrapSchema(PDO $pdo): void {
         ts INT UNSIGNED NOT NULL,
         KEY idx_bucket_key (bucket, k, ts)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    @file_put_contents($flag, date('c') . "\n");
 }
 
 // Единые заголовки ответа + CORS + обработка preflight. Вызывается первым
-// в каждом эндпоинте.
-function apiHeaders(string $methods): void {
+// в каждом эндпоинте. $origin позволяет публичному /report открыть CORS всем.
+function apiHeaders(string $methods, string $origin = ALLOWED_ORIGIN): void {
     header('Content-Type: application/json; charset=utf-8');
-    header('Access-Control-Allow-Origin: ' . ALLOWED_ORIGIN);
+    header('Access-Control-Allow-Origin: ' . $origin);
     header("Access-Control-Allow-Methods: $methods, OPTIONS");
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
     if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
@@ -101,23 +118,57 @@ function clientIp(): string {
     return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 }
 
-function checkRateLimit(string $bucket, string $key, int $maxAttempts, int $windowSeconds): bool {
+// Читает число неудачных попыток в окне БЕЗ записи новой (успешные входы не
+// расходуют лимит — иначе смена за одним NAT-IP блокирует сама себя).
+function failedAttempts(string $bucket, string $key, int $windowSeconds): int {
     $db = pdo();
     $key = substr($key, 0, 128);
-    $now = time();
     $db->prepare('DELETE FROM rate_limit WHERE bucket = ? AND ts < ?')
-       ->execute([$bucket, $now - $windowSeconds]);
+       ->execute([$bucket, time() - $windowSeconds]);
     $q = $db->prepare('SELECT COUNT(*) AS c FROM rate_limit WHERE bucket = ? AND k = ?');
     $q->execute([$bucket, $key]);
-    if ((int)$q->fetch()['c'] >= $maxAttempts) return false;
-    $db->prepare('INSERT INTO rate_limit (bucket, k, ts) VALUES (?, ?, ?)')
-       ->execute([$bucket, $key, $now]);
-    return true;
+    return (int)$q->fetch()['c'];
 }
 
+function recordFailure(string $bucket, string $key): void {
+    pdo()->prepare('INSERT INTO rate_limit (bucket, k, ts) VALUES (?, ?, ?)')
+         ->execute([$bucket, substr($key, 0, 128), time()]);
+}
+
+// Пишет попытку входа и в login_log (для SQL-разбора), и — при неудаче — в
+// activity_log, чтобы серия подборов была видна админу прямо в журнале
+// действий (регрессия аудита §6 иначе теряется: login_log в UI не показан).
 function logLoginAttempt(string $login, bool $ok): void {
-    pdo()->prepare('INSERT INTO login_log (login, ok, ip) VALUES (?, ?, ?)')
-         ->execute([substr($login, 0, 64), $ok ? 1 : 0, clientIp()]);
+    $db = pdo();
+    $db->prepare('INSERT INTO login_log (login, ok, ip) VALUES (?, ?, ?)')
+       ->execute([substr($login, 0, 64), $ok ? 1 : 0, clientIp()]);
+    if (!$ok) {
+        $entry = [
+            'userName'  => $login !== '' ? $login : '—',
+            'role'      => '—',
+            'action'    => 'Неудачная попытка входа',
+            'target'    => $login,
+            'details'   => ['ip' => clientIp()],
+            'tsMs'      => (int)round(microtime(true) * 1000),
+            'createdAt' => date('c'),
+        ];
+        $db->prepare('INSERT INTO activity_log (entry) VALUES (?)')
+           ->execute([json_encode($entry, JSON_UNESCAPED_UNICODE)]);
+    }
+    // Ротация: изредка подрезаем логи до последних 5000 (в UI видно только 200).
+    if (($login[0] ?? 'x') <= '3') { // дешёвый ~19%-й сэмпл без random-функций
+        pruneLog('activity_log', 5000);
+        pruneLog('login_log', 5000);
+    }
+}
+
+// Оставляет только последние $keep строк таблицы с автоинкрементным id.
+function pruneLog(string $table, int $keep): void {
+    $db = pdo();
+    $max = (int)$db->query("SELECT COALESCE(MAX(id),0) AS m FROM $table")->fetch()['m'];
+    if ($max > $keep) {
+        $db->prepare("DELETE FROM $table WHERE id < ?")->execute([$max - $keep]);
+    }
 }
 
 // TTL сессии 12 часов — то же значение, что было у sessionStorage-сессии
@@ -126,9 +177,9 @@ function createSession(array $role): string {
     $db = pdo();
     $db->prepare('DELETE FROM sessions WHERE expires_at < ?')->execute([time()]);
     $token = bin2hex(random_bytes(32));
-    $db->prepare('INSERT INTO sessions (token, role_id, login, full_access, expires_at)
+    $db->prepare('INSERT INTO sessions (token, role_id, login, is_admin, expires_at)
                   VALUES (?, ?, ?, ?, ?)')
-       ->execute([$token, $role['id'], $role['login'], (int)$role['full_access'],
+       ->execute([$token, $role['id'], $role['login'], (int)$role['is_admin'],
                   time() + 60 * 60 * 12]);
     return $token;
 }
@@ -147,7 +198,7 @@ function bearerToken(): string {
 function currentSession(): ?array {
     $token = bearerToken();
     if ($token === '' || strlen($token) > 64) return null;
-    $q = pdo()->prepare('SELECT token, role_id, login, full_access, expires_at
+    $q = pdo()->prepare('SELECT token, role_id, login, is_admin, expires_at
                          FROM sessions WHERE token = ?');
     $q->execute([$token]);
     $s = $q->fetch();
@@ -155,18 +206,18 @@ function currentSession(): ?array {
     return $s;
 }
 
-// Жёсткая проверка: 401 без сессии, 403 если нужен полный доступ, а его нет.
+// Жёсткая проверка: 401 без сессии, 403 если нужен админ, а сессия не админская.
 // Готовность к Identity Service (ТЗ, лист 7, п.2): когда появится центральный
 // сервис, сюда добавится проверка его токена как второй источник сессии —
 // сигнатура и вызывающий код не изменятся.
-function requireAuth(bool $fullAccessOnly = false): array {
+function requireAuth(bool $adminOnly = false): array {
     $session = currentSession();
     if (!$session) {
         http_response_code(401);
         echo json_encode(['error' => 'Требуется авторизация']);
         exit;
     }
-    if ($fullAccessOnly && !(int)$session['full_access']) {
+    if ($adminOnly && !(int)$session['is_admin']) {
         http_response_code(403);
         echo json_encode(['error' => 'Недостаточно прав']);
         exit;
@@ -174,62 +225,94 @@ function requireAuth(bool $fullAccessOnly = false): array {
     return $session;
 }
 
-// Синхронизация ролей из присланного state в таблицу roles.
-// Пароли НИКОГДА не сохраняются в app_state: непустой role.password
-// хешируется (bcrypt) в таблицу и вырезается из JSON. Так редактор ролей в
-// админке продолжает работать без изменений на клиенте.
+function roleIsAdmin(array $r): bool {
+    $tabs = $r['tabs'] ?? [];
+    return is_array($tabs) && in_array(ADMIN_TAB, $tabs, true);
+}
+
+// Собирает список ролей из таблицы для встраивания в app_state (без паролей).
+// Используется, когда НЕ-админ сохраняет state: его версия roles игнорируется и
+// заменяется авторитетной из БД, чтобы обычный пользователь не мог подменить
+// роли/права прямым POST.
+function rolesForState(): array {
+    $rows = pdo()->query('SELECT id, name, login, is_admin, tabs, fields FROM roles')->fetchAll();
+    $out = [];
+    foreach ($rows as $r) {
+        $out[] = [
+            'id'         => $r['id'],
+            'name'       => $r['name'],
+            'login'      => $r['login'],
+            'tabs'       => json_decode($r['tabs'] ?? '[]', true) ?: [],
+            'fields'     => json_decode($r['fields'] ?? '{}', true) ?: (object)[],
+            'fullAccess' => (bool)$r['is_admin'], // историческое поле клиента
+        ];
+    }
+    return $out;
+}
+
+// Синхронизация ролей из присланного state в таблицу roles. ТОЛЬКО для админа
+// (вызывающий обязан это проверить). Пароли НИКОГДА не сохраняются в app_state:
+// непустой role.password хешируется (bcrypt) в таблицу и вырезается из JSON.
+// Бросает ApiRuleException при нарушении бизнес-правила (эндпоинт → HTTP-код).
 function syncRolesFromState(array &$state): void {
     if (!isset($state['roles']) || !is_array($state['roles'])) return;
     $db = pdo();
+
+    // Предпроход: собираем валидные id и вырезаем пароли из JSON СРАЗУ (даже у
+    // ролей, которые ниже отсеются по continue — иначе plaintext уедет в state).
     $seenIds = [];
-    $hasFullAccess = false;
-
+    $hasAdmin = false;
     foreach ($state['roles'] as &$r) {
-        if (!is_array($r) || !isset($r['id'], $r['login'])) continue;
-        $id    = substr((string)$r['id'], 0, 64);
-        $login = substr(trim((string)$r['login']), 0, 64);
-        if ($id === '' || $login === '') continue;
-        $seenIds[] = $id;
-        $full = !empty($r['fullAccess']) ? 1 : 0;
-        if ($full) $hasFullAccess = true;
-
-        $newHash = '';
-        if (isset($r['password']) && trim((string)$r['password']) !== '') {
-            $newHash = password_hash(trim((string)$r['password']), PASSWORD_BCRYPT);
-        }
+        if (!is_array($r)) continue;
+        $plain = isset($r['password']) ? trim((string)$r['password']) : '';
         unset($r['password'], $r['plain_password']);
-
-        $db->prepare('INSERT INTO roles (id, name, login, password_hash, full_access, tabs, fields)
-                      VALUES (?, ?, ?, ?, ?, ?, ?)
-                      ON DUPLICATE KEY UPDATE
-                        name = VALUES(name), login = VALUES(login),
-                        full_access = VALUES(full_access),
-                        tabs = VALUES(tabs), fields = VALUES(fields),
-                        password_hash = IF(VALUES(password_hash) <> \'\', VALUES(password_hash), password_hash)')
-           ->execute([
-                $id,
-                substr((string)($r['name'] ?? $login), 0, 190),
-                $login,
-                $newHash,
-                $full,
-                json_encode($r['tabs']   ?? [], JSON_UNESCAPED_UNICODE),
-                json_encode($r['fields'] ?? (object)[], JSON_UNESCAPED_UNICODE),
-           ]);
+        $r['_plain'] = $plain; // временно, снимем после upsert
+        $id    = isset($r['id']) ? substr((string)$r['id'], 0, 64) : '';
+        $login = isset($r['login']) ? substr(trim((string)$r['login']), 0, 64) : '';
+        if ($id === '' || $login === '') { $r['_skip'] = true; continue; }
+        $seenIds[] = $id;
+        if (roleIsAdmin($r)) $hasAdmin = true;
     }
     unset($r);
 
-    // Защита от самоблокировки: нельзя сохранить state, в котором не осталось
-    // ни одной роли с полным доступом — иначе в админку больше никто не войдёт.
-    if (!$hasFullAccess) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Нельзя удалить/отключить последнюю роль с полным доступом']);
-        exit;
+    // Защита от самоблокировки: хотя бы одна роль с доступом к админ-панели
+    // должна остаться, иначе управлять ролями станет некому.
+    if (!$hasAdmin) {
+        throw new ApiRuleException('Нельзя удалить/отключить последнюю роль с доступом к админ-панели');
     }
 
-    // Роль, удалённая в админке, удаляется и из таблицы (доступ отзывается сразу).
+    // Удаляем исчезнувшие роли и их сессии ДО upsert — чтобы перенос логина с
+    // удаляемой роли на другую не столкнулся по UNIQUE(login) со строкой,
+    // которую всё равно удаляем (иначе ON DUPLICATE перезапишет чужую строку).
     if ($seenIds) {
         $ph = implode(',', array_fill(0, count($seenIds), '?'));
         $db->prepare("DELETE FROM sessions WHERE role_id NOT IN ($ph)")->execute($seenIds);
         $db->prepare("DELETE FROM roles WHERE id NOT IN ($ph)")->execute($seenIds);
     }
+
+    $up = $db->prepare('INSERT INTO roles (id, name, login, password_hash, is_admin, tabs, fields)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                          name = VALUES(name), login = VALUES(login),
+                          is_admin = VALUES(is_admin),
+                          tabs = VALUES(tabs), fields = VALUES(fields),
+                          password_hash = IF(VALUES(password_hash) <> \'\', VALUES(password_hash), password_hash)');
+
+    foreach ($state['roles'] as &$r) {
+        if (!is_array($r)) continue;
+        $plain = $r['_plain'] ?? '';
+        $skip  = !empty($r['_skip']);
+        unset($r['_plain'], $r['_skip']);
+        if ($skip) continue;
+        $up->execute([
+            substr((string)$r['id'], 0, 64),
+            substr((string)($r['name'] ?? $r['login']), 0, 190),
+            substr(trim((string)$r['login']), 0, 64),
+            $plain !== '' ? password_hash($plain, PASSWORD_BCRYPT) : '',
+            roleIsAdmin($r) ? 1 : 0,
+            json_encode($r['tabs']   ?? [], JSON_UNESCAPED_UNICODE),
+            json_encode($r['fields'] ?? (object)[], JSON_UNESCAPED_UNICODE),
+        ]);
+    }
+    unset($r);
 }

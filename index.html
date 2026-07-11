@@ -2682,7 +2682,7 @@ async function loadState() {
         if (j.data) {
           state = { ...state, ...j.data };
           _baseRev = j.rev || 0; // запоминаем версию, на которой основаны локальные данные
-          try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
+          try { localStorage.setItem('varka_state_v2', localStateJson()); } catch(e) {}
           fromServer = true;
           _stateLoadedFromFirestore = true;
           console.info('[API] состояние загружено · rev', _baseRev);
@@ -2865,6 +2865,31 @@ function sanitizeUserText(s) {
   return s.replace(/</g, '‹').replace(/>/g, '›');
 }
 
+// Экранирование для безопасной вставки в innerHTML. Нужно там, где значение
+// приходит с сервера и могло быть записано другим клиентом (журнал действий):
+// санитизация на вводе покрывает только текущий клиент, а записи журнала
+// сохранял кто угодно — экранируем на выводе.
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// JSON состояния для локального хранения (localStorage-кэш, кольцо бэкапов) с
+// вырезанными паролями ролей. Пароль существует в state.roles только между
+// вводом в админке и ответом сервера; на диск браузера он попадать не должен
+// (сервер хранит только bcrypt-хеш). В памяти state пароль остаётся до POST.
+function localStateJson() {
+  const clone = { ...state };
+  if (Array.isArray(state.roles)) {
+    clone.roles = state.roles.map(r => {
+      if (r && 'password' in r) { const c = { ...r }; delete c.password; return c; }
+      return r;
+    });
+  }
+  return JSON.stringify(clone);
+}
+
 // Санитизация всех полей state, куда пользователи вводят произвольный текст.
 // Пароли не трогаем (могут содержать любые символы и никогда не рендерятся).
 function sanitizeStateUserText() {
@@ -2890,7 +2915,7 @@ function backupRingPush() {
     const ring = JSON.parse(localStorage.getItem(BACKUP_RING_KEY) || '[]');
     const rev = state._rev || 0;
     if (ring.length && ring[ring.length - 1].rev === rev) return; // эта версия уже есть
-    ring.push({ ts: new Date().toISOString(), rev, data: JSON.stringify(state) });
+    ring.push({ ts: new Date().toISOString(), rev, data: localStateJson() });
     while (ring.length > 5) ring.shift();
     localStorage.setItem(BACKUP_RING_KEY, JSON.stringify(ring));
   } catch (e) {
@@ -2952,9 +2977,14 @@ function saveState(onResult) {
     }
   }
   // localStorage — быстрый офлайн-кэш
-  try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
+  try { localStorage.setItem('varka_state_v2', localStateJson()); } catch(e) {}
   // Сервер (api/state) — основное общее хранилище (дебаунс 600 мс)
-  if (!db || !authToken) { if (onResult) onResult('ok'); return; } // нет сервера — localStorage уже записан, для критичных действий этого достаточно
+  if (!db) { if (onResult) onResult('ok'); return; } // сервер недоступен (офлайн) — localStorage уже записан, для критичных действий этого достаточно
+  // Сессия истекла/отозвана (db есть, токена нет): НЕ рапортуем успех — иначе
+  // критичное действие оператора после 401 показалось бы сохранённым, хотя на
+  // сервер не ушло. Возвращаем 'error', чтобы performCriticalBatchWrite не
+  // подтверждал успех и показал предупреждение.
+  if (!authToken) { if (onResult) onResult('error'); return; }
   // Сразу блокируем фоновый опрос чтобы он не перезаписал локальные изменения
   // до того как дебаунс отработает (иначе UI сбрасывается через ~200ms)
   _snapshotIgnoreUntil = Date.now() + 3600;
@@ -2982,11 +3012,9 @@ function saveState(onResult) {
       const j = await res.json();
       _baseRev = j.rev;
       state._rev = j.rev;
-      // Пароли ролей ушли на сервер (bcrypt) и в state не хранятся — подчищаем
-      // локальную копию и кэш, чтобы plaintext не задерживался в браузере.
-      let hadPwd = false;
-      (state.roles || []).forEach(r => { if (r && 'password' in r) { delete r.password; hadPwd = true; } });
-      if (hadPwd) { try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {} }
+      // Пароль роли ушёл на сервер (bcrypt) — убираем его из state в памяти.
+      // На диск (localStorage/бэкап) пароль и так не попадал — там localStateJson.
+      (state.roles || []).forEach(r => { if (r && 'password' in r) delete r.password; });
       if (onResult) onResult('ok');
     }).catch(err => {
       if (String(err.message) !== 'unauthorized') console.error('[API] saveState:', err);
@@ -3066,7 +3094,7 @@ function _applyRemoteState(data) {
   try {
     state = { ...state, ...data };
     _baseRev = data._rev || 0; // теперь локальные данные основаны на этой версии
-    try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
+    try { localStorage.setItem('varka_state_v2', localStateJson()); } catch(e) {}
     applyStateMigrations();
     render();
     const p = document.querySelector('.page.active');
@@ -3104,10 +3132,13 @@ function setupFirestoreSync() {
 // чтобы устаревший таб не работал поверх протухших данных.
 function _resyncFromFirestore() {
   if (!db || !authToken) return;
-  apiFetch('/state').then(async res => {
+  // Передаём свой rev: если на сервере тот же — вернётся {unchanged:true} (~30
+  // байт) вместо всего состояния (~650КБ). Опрос идёт с каждого устройства
+  // каждые 15с, поэтому пустой ответ при неизменном rev экономит трафик/CPU.
+  apiFetch('/state?rev=' + _baseRev).then(async res => {
     if (!res.ok) return;
     const j = await res.json();
-    if (!j.data) return;
+    if (j.unchanged || !j.data) return;
     if (Date.now() < _snapshotIgnoreUntil) {
       // Даже в окне подавления (после нашей же записи) обновляем _baseRev — чтобы знать
       // самую свежую версию и не считать себя «устаревшими» из-за собственного эха.
@@ -3141,7 +3172,7 @@ function logActivity(action, opts) {
       lang:     navigator.language,
     },
   };
-  apiFetch('/activity', { method: 'POST', body: JSON.stringify(entry) }).catch(() => {});
+  return apiFetch('/activity', { method: 'POST', body: JSON.stringify(entry) }).catch(() => {});
 }
 
 async function renderActivityLog() {
@@ -3156,16 +3187,18 @@ async function renderActivityLog() {
     if (!entries.length) { el.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Журнал пуст</div>'; return; }
     el.innerHTML = entries.map(e => {
       const dt = new Date(e.tsMs || e.createdAt || e.ts).toLocaleString('ru-RU');
-      const det = e.details && Object.keys(e.details).length ? `<div style="margin-top:3px;color:var(--text3);font-size:11px;word-break:break-all;">${JSON.stringify(e.details)}</div>` : '';
+      // Все поля — с сервера (могли быть записаны другим клиентом), экранируем.
+      const det = e.details && Object.keys(e.details).length ? `<div style="margin-top:3px;color:var(--text3);font-size:11px;word-break:break-all;">${escapeHtml(JSON.stringify(e.details))}</div>` : '';
+      const ua = (e.deviceInfo && e.deviceInfo.ua) || e.ua || '';
       return `<div style="padding:10px 14px;border-bottom:1px solid var(--border);">
         <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;">
-          <span style="font-weight:700;color:var(--accent);">${e.userName||'—'}</span>
-          <span style="font-size:11px;color:var(--text2);">${e.userRole||''}</span>
-          <span style="margin-left:auto;font-size:11px;color:var(--text3);">${dt}</span>
+          <span style="font-weight:700;color:var(--accent);">${escapeHtml(e.userName||'—')}</span>
+          <span style="font-size:11px;color:var(--text2);">${escapeHtml(e.roleName||e.userRole||'')}</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3);">${escapeHtml(dt)}</span>
         </div>
-        <div style="margin-top:3px;font-size:13px;color:var(--text);">${e.action}</div>
+        <div style="margin-top:3px;font-size:13px;color:var(--text);">${escapeHtml(e.action)}${e.target?' · '+escapeHtml(e.target):''}</div>
         ${det}
-        <div style="margin-top:2px;font-size:10px;color:var(--text3);opacity:.6;">${(e.ua||'').slice(0,80)}</div>
+        <div style="margin-top:2px;font-size:10px;color:var(--text3);opacity:.6;">${escapeHtml(String(ua).slice(0,80))}</div>
       </div>`;
     }).join('');
   } catch(err) {
@@ -3243,6 +3276,12 @@ async function doLogin() {
   }
 
   authToken = j.token;
+  // Сервер ответил на /auth — значит он доступен. Если стартовый ping в
+  // initFirebase не прошёл (кратковременный сбой при загрузке), db остался null,
+  // и без этого loadState/saveState/опрос молча ушли бы в офлайн на всю смену.
+  db = true; _fbReady = true; _firebaseError = false;
+  const banner = document.getElementById('firebase-error-banner');
+  if (banner) banner.remove();
   currentUser = { roleId: j.role.id, loginAt: Date.now() };
   try { sessionStorage.setItem('varka_session', JSON.stringify({ ...currentUser, token: authToken })); } catch(e) {}
 
@@ -3267,10 +3306,14 @@ function confirmResetRolesToDefault() {
   showToast('Роли сброшены к стандартным значениям');
 }
 
-function doLogout() {
-  logActivity('Выход из системы', { target: currentUser ? currentUser.roleId : '' });
-  // Реальная инвалидация токена на сервере (не только в браузере).
-  if (authToken) { apiFetch('/logout', { method: 'POST' }).catch(() => {}); }
+let _loggingOut = false; // подавляет ложное «Сессия истекла» при штатном выходе
+async function doLogout() {
+  _loggingOut = true;
+  // Сначала дожидаемся записи «Выход» (пока токен ещё жив), ПОТОМ гасим сессию —
+  // иначе /logout мог обогнать /activity, тот получил бы 401 и показал ложное
+  // «Сессия истекла — войдите заново», а запись о выходе потерялась бы.
+  try { await logActivity('Выход из системы', { target: currentUser ? currentUser.roleId : '' }); } catch(e) {}
+  if (authToken) { try { await apiFetch('/logout', { method: 'POST' }); } catch(e) {} }
   authToken = null;
   currentUser = null;
   document.body.classList.remove('role-terminal');
@@ -3281,6 +3324,7 @@ function doLogout() {
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-password').value = '';
+  _loggingOut = false;
 }
 
 function toggleSidebar() {
@@ -3793,8 +3837,12 @@ function handleAuthExpired() {
   if (shell) shell.style.display = 'none';
   if (login) {
     login.style.display = 'flex';
-    const err = document.getElementById('login-error');
-    if (err) { err.style.color = 'var(--danger)'; err.textContent = 'Сессия истекла — войдите заново'; }
+    // При штатном выходе (_loggingOut) 401 на фоновом /activity — не ошибка,
+    // сообщение не показываем.
+    if (!_loggingOut) {
+      const err = document.getElementById('login-error');
+      if (err) { err.style.color = 'var(--danger)'; err.textContent = 'Сессия истекла — войдите заново'; }
+    }
   }
 }
 
@@ -7167,7 +7215,11 @@ function openEditRoleModal(roleId) {
   document.getElementById('role-edit-id').value = r.id;
   document.getElementById('role-name').value = r.name;
   document.getElementById('role-login').value = r.login;
-  document.getElementById('role-password').value = r.password;
+  // Пароль хранится на сервере (bcrypt) и в state его больше нет — поле пустое.
+  // Пусто при сохранении = «не менять пароль» (см. saveRoleFromModal).
+  const pwdField = document.getElementById('role-password');
+  pwdField.value = '';
+  pwdField.placeholder = 'оставьте пустым — пароль не изменится';
   document.getElementById('role-delete-btn').style.display = state.roles.length > 1 ? 'inline-flex' : 'none';
   const tog = document.getElementById('role-full-access-toggle');
   tog.classList.toggle('on', !!r.fullAccess);
@@ -7226,7 +7278,11 @@ function saveRoleFromModal() {
   const name = document.getElementById('role-name').value.trim();
   const login = document.getElementById('role-login').value.trim();
   const password = document.getElementById('role-password').value.trim();
-  if (!name || !login || !password) { showToast('Заполните название, логин и пароль'); return; }
+  // Пароль обязателен только для НОВОЙ роли. При редактировании пустое поле =
+  // «не менять пароль» (он на сервере). Иначе любое сохранение роли перезаписало
+  // бы пароль пустышкой и отрезало сотруднику вход.
+  if (!name || !login) { showToast('Заполните название и логин'); return; }
+  if (!editId && !password) { showToast('Задайте пароль для новой роли'); return; }
 
   // проверка уникальности логина (кроме самой себя при редактировании)
   const loginTaken = state.roles.some(r => r.login === login && r.id !== editId);
@@ -7241,7 +7297,9 @@ function saveRoleFromModal() {
 
   if (editId) {
     const r = getRoleById(editId);
-    r.name = name; r.login = login; r.password = password; r.tabs = tabs; r.fields = fields; r.fullAccess = fullAccess;
+    r.name = name; r.login = login; r.tabs = tabs; r.fields = fields; r.fullAccess = fullAccess;
+    // пароль трогаем только если админ его ввёл; пусто = сервер оставит старый
+    if (password) r.password = password; else delete r.password;
     showToast(`Роль «${name}» обновлена`);
   } else {
     const id = 'role_' + Date.now();
