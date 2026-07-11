@@ -1311,9 +1311,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous"></script>
 <!-- Firebase SDK (compat) -->
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<!-- Firebase SDK удалён: хранилище мигрировано на собственный REST API (api/) + MySQL, 2026-07-11 -->
 </head>
 <body>
 <!-- ═══════════════ LOADING SCREEN ═══════════════ -->
@@ -2670,30 +2668,40 @@ function applyStateMigrations() {
   });
 }
 
+// Загрузка состояния с сервера (GET api/state, требует токен). До входа в
+// систему состояние берётся только из localStorage-кэша (логотип/тема для
+// экрана логина) — серверное подтянется сразу после логина.
 async function loadState() {
-  let fromFirestore = false;
+  let fromServer = false;
 
-  if (db) {
+  if (db && authToken) {
     try {
-      const snap = await db.collection('varka').doc('state').get();
-      if (snap.exists) {
-        state = { ...state, ...snap.data() };
-        _baseRev = snap.data()._rev || 0; // запоминаем версию, на которой основаны локальные данные
-        try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
-        fromFirestore = true;
-        _stateLoadedFromFirestore = true;
-        console.info('[Firestore] состояние загружено · rev', _baseRev);
+      const res = await apiFetch('/state');
+      if (res.ok) {
+        const j = await res.json();
+        if (j.data) {
+          state = { ...state, ...j.data };
+          _baseRev = j.rev || 0; // запоминаем версию, на которой основаны локальные данные
+          try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
+          fromServer = true;
+          _stateLoadedFromFirestore = true;
+          console.info('[API] состояние загружено · rev', _baseRev);
+        } else {
+          console.warn('[API] состояние на сервере пустое — ждём данных, ничего не пишем');
+          _stateLoadedFromFirestore = false;
+        }
       } else {
-        console.warn('[Firestore] документ пуст — ждём данных, в Firestore ничего не пишем');
-        _stateLoadedFromFirestore = false;
+        throw new Error('HTTP ' + res.status);
       }
     } catch(err) {
-      console.error('[Firestore] loadState — Firebase недоступен:', err);
-      _firebaseError = true;
+      if (String(err.message) !== 'unauthorized') {
+        console.error('[API] loadState — сервер недоступен:', err);
+        _firebaseError = true;
+      }
     }
   }
 
-  if (!fromFirestore) {
+  if (!fromServer) {
     try {
       const s = localStorage.getItem('varka_state_v2');
       if (s) { state = { ...state, ...JSON.parse(s) }; console.info('[Cache] загружено из localStorage'); }
@@ -2701,6 +2709,7 @@ async function loadState() {
   }
 
   applyStateMigrations();
+  return fromServer;
 }
 
 function getMondayOf(date) {
@@ -2944,44 +2953,44 @@ function saveState(onResult) {
   }
   // localStorage — быстрый офлайн-кэш
   try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {}
-  // Firestore — основное общее хранилище (дебаунс 600 мс)
-  if (!db) { if (onResult) onResult('ok'); return; } // нет Firestore — localStorage уже записан, для критичных действий этого достаточно
-  // Сразу блокируем onSnapshot чтобы он не перезаписал локальные изменения
+  // Сервер (api/state) — основное общее хранилище (дебаунс 600 мс)
+  if (!db || !authToken) { if (onResult) onResult('ok'); return; } // нет сервера — localStorage уже записан, для критичных действий этого достаточно
+  // Сразу блокируем фоновый опрос чтобы он не перезаписал локальные изменения
   // до того как дебаунс отработает (иначе UI сбрасывается через ~200ms)
   _snapshotIgnoreUntil = Date.now() + 3600;
   if (saveState._t) clearTimeout(saveState._t);
   saveState._t = setTimeout(() => {
     _snapshotIgnoreUntil = Date.now() + 3000;
-    const ref = db.collection('varka').doc('state');
-    // Запись через транзакцию с проверкой версии: если в облаке уже более новая
-    // версия (чужое устройство успело записать) — НЕ затираем её устаревшим
+    // Запись с baseRev: если на сервере уже более новая версия (чужое устройство
+    // успело записать) — сервер вернёт 409 и НЕ даст затереть её устаревшим
     // состоянием. Это защита от массового отката данных «старым» табом/устройством.
-    db.runTransaction(async tx => {
-      const doc = await tx.get(ref);
-      const remoteRev = doc.exists ? (doc.data()._rev || 0) : 0;
-      if (remoteRev > _baseRev) {
-        const e = new Error('stale'); e._stale = true; e._remote = doc.data(); throw e;
-      }
-      const newRev = remoteRev + 1;
-      state._rev = newRev;
-      state._updatedAt = new Date().toISOString();
-      tx.set(ref, JSON.parse(JSON.stringify(state)));
-      return newRev;
-    }).then(newRev => {
-      _baseRev = newRev;
-      if (onResult) onResult('ok');
-    }).catch(err => {
-      if (err && err._stale) {
-        // Наше состояние устарело — принимаем свежее из облака, локальную запись отменяем.
-        console.warn('[Firestore] saveState отменён: в облаке более свежая версия (rev ' +
-          ((err._remote && err._remote._rev) || '?') + ' > base ' + _baseRev + '). Принимаю свежие данные.');
-        _applyRemoteState(err._remote);
+    state._updatedAt = new Date().toISOString();
+    apiFetch('/state', {
+      method: 'POST',
+      body: JSON.stringify({ baseRev: _baseRev, data: state }),
+    }).then(async res => {
+      if (res.status === 409) {
+        const j = await res.json();
+        console.warn('[API] saveState отменён: на сервере более свежая версия (rev ' +
+          (j.rev || '?') + ' > base ' + _baseRev + '). Принимаю свежие данные.');
+        _applyRemoteState(j.data);
         if (!onResult && typeof showToast === 'function') showToast('Данные обновлены на другом устройстве — проверьте и повторите действие');
         if (onResult) onResult('stale');
-      } else {
-        console.error('[Firestore] saveState:', err);
-        if (onResult) onResult('error');
+        return;
       }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      _baseRev = j.rev;
+      state._rev = j.rev;
+      // Пароли ролей ушли на сервер (bcrypt) и в state не хранятся — подчищаем
+      // локальную копию и кэш, чтобы plaintext не задерживался в браузере.
+      let hadPwd = false;
+      (state.roles || []).forEach(r => { if (r && 'password' in r) { delete r.password; hadPwd = true; } });
+      if (hadPwd) { try { localStorage.setItem('varka_state_v2', JSON.stringify(state)); } catch(e) {} }
+      if (onResult) onResult('ok');
+    }).catch(err => {
+      if (String(err.message) !== 'unauthorized') console.error('[API] saveState:', err);
+      if (onResult) onResult('error');
     });
   }, 600);
 }
@@ -3022,49 +3031,29 @@ function performCriticalBatchWrite(batchId, mutator, callbacks = {}, _retry = {}
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// FIREBASE INIT / SYNC / ACTIVITY LOG
+// API INIT / SYNC / ACTIVITY LOG (бывший Firebase-слой)
 // ════════════════════════════════════════════════════════════════════════════
+// Проверка доступности сервера через публичный эндпоинт (api/report не требует
+// токена). db=true означает «серверное хранилище доступно» для всего кода ниже.
 async function initFirebase() {
-  if (FIREBASE_CONFIG.projectId === 'PASTE_YOUR_PROJECT_ID') {
-    console.warn('[Firebase] конфиг не заполнен — работаем только с localStorage');
-    return;
-  }
   try {
-    firebase.initializeApp(FIREBASE_CONFIG);
-    db = firebase.firestore();
-    const cred = await firebase.auth().signInAnonymously();
-    _fbUid = cred.user.uid;
+    const res = await fetch(API_BASE + '/report', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    db = true;
     _fbReady = true;
-    console.info('[Firebase] подключено uid:', _fbUid);
+    console.info('[API] сервер доступен');
   } catch(err) {
-    console.error('[Firebase] ошибка:', err.message);
+    console.error('[API] сервер недоступен:', err.message);
     db = null;
   }
 }
 
+// Историческое имя (уровень для журнала действий); авторизацию проверяет сервер.
 function getFirebaseRoleLevel(role) {
   if (!role) return 'employee';
   if (role.id === 'admin') return 'admin';
   if (role.tabs && role.tabs.length > 1) return 'manager';
   return 'employee';
-}
-
-// ВНИМАНИЕ: поле role здесь самозаявленное клиентом, не источник правды для авторизации.
-// НЕ использовать в будущих Firestore Rules для проверки прав — см. SECURITY.md, находка Часть 2.
-async function writeUserProfile(roleId) {
-  if (!db || !_fbUid) return;
-  const role = getRoleById(roleId);
-  if (!role) return;
-  try {
-    await db.collection('users').doc(_fbUid).set({
-      uid:      _fbUid,
-      name:     role.login,
-      roleId:   role.id,
-      roleName: role.name,
-      role:     getFirebaseRoleLevel(role),
-      lastSeen: new Date().toISOString(),
-    }, { merge: true });
-  } catch(err) { console.error('[Firestore] writeUserProfile:', err); }
 }
 
 // Применяет ВХОДЯЩЕЕ состояние из Firestore к локальному без обратной записи.
@@ -3095,40 +3084,47 @@ function _applyRemoteState(data) {
   } finally { _applyingRemoteState = false; }
 }
 
+// Realtime-подписка Firestore заменена фоновым опросом: раз в 15 секунд (только
+// в видимой вкладке и только после входа) сверяем rev на сервере и принимаем
+// более свежее состояние. Для темпа работы цеха этого достаточно; окно
+// _snapshotIgnoreUntil работает так же, как при onSnapshot.
+const STATE_POLL_MS = 15000;
 function setupFirestoreSync() {
   if (!db) return;
-  db.collection('varka').doc('state').onSnapshot(snap => {
-    if (!snap.exists) return;
-    // Даже в окне подавления (после нашей же записи) обновляем _baseRev — чтобы знать
-    // самую свежую версию и не считать себя «устаревшими» из-за собственного эха.
-    if (Date.now() < _snapshotIgnoreUntil) {
-      const r = snap.data()._rev || 0;
-      if (r > _baseRev) _baseRev = r;
-      return;
-    }
-    _applyRemoteState(snap.data());
-  }, err => console.error('[Firestore] sync:', err));
+  if (setupFirestoreSync._t) return; // уже запущен
+  setupFirestoreSync._t = setInterval(() => {
+    if (!authToken || document.hidden) return;
+    if (Date.now() < _snapshotIgnoreUntil) return;
+    _resyncFromFirestore();
+  }, STATE_POLL_MS);
 }
 
 // Принудительный ресинк при возврате к вкладке: фоновый/«уснувший» таб мог пропустить
-// обновления. Подтягиваем свежий документ ДО того, как пользователь что-то нажмёт,
+// обновления. Подтягиваем свежую версию ДО того, как пользователь что-то нажмёт,
 // чтобы устаревший таб не работал поверх протухших данных.
 function _resyncFromFirestore() {
-  if (!db) return;
-  db.collection('varka').doc('state').get().then(snap => {
-    if (!snap.exists) return;
-    const r = snap.data()._rev || 0;
-    if (r > _baseRev) _applyRemoteState(snap.data());
+  if (!db || !authToken) return;
+  apiFetch('/state').then(async res => {
+    if (!res.ok) return;
+    const j = await res.json();
+    if (!j.data) return;
+    if (Date.now() < _snapshotIgnoreUntil) {
+      // Даже в окне подавления (после нашей же записи) обновляем _baseRev — чтобы знать
+      // самую свежую версию и не считать себя «устаревшими» из-за собственного эха.
+      if ((j.rev || 0) > _baseRev) _baseRev = j.rev;
+      return;
+    }
+    if ((j.rev || 0) > _baseRev) _applyRemoteState(j.data);
   }).catch(() => {});
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) _resyncFromFirestore(); });
 window.addEventListener('focus', _resyncFromFirestore);
 
 function logActivity(action, opts) {
-  if (!db) return;
+  if (!db || !authToken) return;
   const role = currentUser ? getRoleById(currentUser.roleId) : null;
   const entry = {
-    userId:     _fbUid || (currentUser ? currentUser.roleId : 'system'),
+    userId:     currentUser ? currentUser.roleId : 'system',
     userName:   role ? role.login    : '—',
     role:       role ? getFirebaseRoleLevel(role) : '—',
     roleName:   role ? role.name     : '—',
@@ -3145,20 +3141,21 @@ function logActivity(action, opts) {
       lang:     navigator.language,
     },
   };
-  db.collection('activityLog').add(entry).catch(() => {});
+  apiFetch('/activity', { method: 'POST', body: JSON.stringify(entry) }).catch(() => {});
 }
 
 async function renderActivityLog() {
   const el = document.getElementById('admin-activitylog-list');
   if (!el) return;
-  if (!db) { el.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Firebase не настроен</div>'; return; }
+  if (!db) { el.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Сервер недоступен</div>'; return; }
   el.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Загрузка...</div>';
   try {
-    const snap = await db.collection('activityLog').orderBy('tsMs','desc').limit(200).get();
-    if (snap.empty) { el.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Журнал пуст</div>'; return; }
-    el.innerHTML = snap.docs.map(d => {
-      const e = d.data();
-      const dt = new Date(e.ts).toLocaleString('ru-RU');
+    const res = await apiFetch('/activity');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const entries = await res.json(); // последние 200, новые первыми
+    if (!entries.length) { el.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Журнал пуст</div>'; return; }
+    el.innerHTML = entries.map(e => {
+      const dt = new Date(e.tsMs || e.createdAt || e.ts).toLocaleString('ru-RU');
       const det = e.details && Object.keys(e.details).length ? `<div style="margin-top:3px;color:var(--text3);font-size:11px;word-break:break-all;">${JSON.stringify(e.details)}</div>` : '';
       return `<div style="padding:10px 14px;border-bottom:1px solid var(--border);">
         <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;">
@@ -3218,23 +3215,47 @@ function addDays(date, n) {
 // ════════════════════════════════════════════════════════════════════════════
 // LOGIN
 // ════════════════════════════════════════════════════════════════════════════
-function doLogin() {
+// Вход теперь проверяет ТОЛЬКО сервер (POST api/auth, bcrypt): паролей в state
+// больше нет. Неудачные попытки фиксирует сервер (login_log + rate limit 10/15мин).
+async function doLogin() {
   const login = (document.getElementById('login-username').value || '').trim();
   const pwd = (document.getElementById('login-password').value || '').trim();
-  const role = state.roles.find(r => r.login.trim() === login);
-  if (!role || (role.password || '').trim() !== pwd) {
-    // Аудит безопасности §6: раньше неудачные попытки нигде не фиксировались —
-    // подбор пароля не оставлял следа. Логируем только логин, без самого пароля.
-    logActivity('Неудачная попытка входа', { target: login });
-    document.getElementById('login-error').style.color = 'var(--danger)';
-    document.getElementById('login-error').textContent = 'Неверный логин или пароль';
+  const errEl = document.getElementById('login-error');
+  errEl.style.color = 'var(--danger)';
+  if (!login || !pwd) { errEl.textContent = 'Введите логин и пароль'; return; }
+  errEl.textContent = '';
+
+  let res, j;
+  try {
+    res = await fetch(API_BASE + '/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, password: pwd }),
+    });
+    j = await res.json();
+  } catch(e) {
+    errEl.textContent = 'Нет связи с сервером — попробуйте ещё раз';
     return;
   }
-  currentUser = { roleId: role.id, loginAt: Date.now() };
-  try { sessionStorage.setItem('varka_session', JSON.stringify(currentUser)); } catch(e) {}
-  writeUserProfile(role.id);
+  if (!res.ok) {
+    errEl.textContent = (j && j.error) ? j.error : 'Неверный логин или пароль';
+    return;
+  }
+
+  authToken = j.token;
+  currentUser = { roleId: j.role.id, loginAt: Date.now() };
+  try { sessionStorage.setItem('varka_session', JSON.stringify({ ...currentUser, token: authToken })); } catch(e) {}
+
+  // Свежее состояние — с токеном (до входа был доступен только localStorage-кэш).
+  await loadState();
+  // Роль с сервера — источник правды на случай, если кэш state.roles устарел.
+  const idx = (state.roles || []).findIndex(r => r.id === j.role.id);
+  if (idx >= 0) state.roles[idx] = { ...state.roles[idx], ...j.role };
+
+  const role = getRoleById(j.role.id) || j.role;
   logActivity('Вход в систему', { target: role.login, details: { roleName: role.name, level: getFirebaseRoleLevel(role) } });
   enterApp();
+  setupFirestoreSync();
 }
 
 function confirmResetRolesToDefault() {
@@ -3248,6 +3269,9 @@ function confirmResetRolesToDefault() {
 
 function doLogout() {
   logActivity('Выход из системы', { target: currentUser ? currentUser.roleId : '' });
+  // Реальная инвалидация токена на сервере (не только в браузере).
+  if (authToken) { apiFetch('/logout', { method: 'POST' }).catch(() => {}); }
+  authToken = null;
   currentUser = null;
   document.body.classList.remove('role-terminal');
   document.body.classList.remove('role-brewop');
@@ -3291,8 +3315,13 @@ function tryRestoreSession() {
     if (s) {
       const parsed = JSON.parse(s);
       const fresh = parsed && parsed.loginAt && (Date.now() - parsed.loginAt) <= SESSION_TTL_MS;
-      // убеждаемся, что роль из сессии всё ещё существует (могла быть удалена админом)
-      if (fresh && parsed.roleId && getRoleById(parsed.roleId)) { currentUser = parsed; return true; }
+      // Настоящую проверку токена делает сервер: первый же запрос с протухшим/
+      // отозванным токеном вернёт 401 → handleAuthExpired() покажет экран входа.
+      if (fresh && parsed.roleId && parsed.token) {
+        authToken = parsed.token;
+        currentUser = { roleId: parsed.roleId, loginAt: parsed.loginAt };
+        return true;
+      }
       sessionStorage.removeItem('varka_session'); // истекла или битая — не оставляем висеть
     }
   } catch(e) {}
@@ -3726,31 +3755,48 @@ function autoAssignReactor(date, hours, runningLoads) {
 </script>
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// FIREBASE CONFIG
-// Вставьте сюда данные из Firebase Console → Project Settings → Your Apps
+// API CONFIG (миграция с Firebase Firestore на собственный REST API + MySQL, 2026-07-11)
+// Бэкенд: api/*.php на этом же поддомене (manufacture.varka.kz), см. api/storage.php.
 // ════════════════════════════════════════════════════════════════════════════
-// ПРИМЕЧАНИЕ: 'varka-test' — исторический ID, это БОЕВОЙ проект, несмотря на имя.
-// НЕ создавать тестовые данные здесь.
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyBKvoCnVNgjlSWEHKAEipZaIKe4mXAeUdA",
-  authDomain:        "varka-test.firebaseapp.com",
-  projectId:         "varka-test",
-  storageBucket:     "varka-test.firebasestorage.app",
-  messagingSenderId: "345233426058",
-  appId:             "1:345233426058:web:fcbd72df003dadc0ec0f73"
-};
+const API_BASE = 'api';
+let authToken = null;      // Bearer-токен серверной сессии (выдаёт api/auth)
+// db оставлен как флаг «серверное хранилище доступно» — весь остальной код
+// проверяет if (db) так же, как раньше проверял наличие Firestore.
 let db = null;
-let _fbReady = false;
-let _fbUid = null;
+let _fbReady = false;      // сервер доступен (имя сохранено, чтобы не трогать проверки по коду)
 let _snapshotIgnoreUntil = 0;
-let _applyingRemoteState = false; // true, пока применяем ВХОДЯЩЕЕ обновление (storage другой вкладки / onSnapshot Firestore) — saveState не пишет обратно, иначе вкладки зацикливают друг друга
-let _stateLoadedFromFirestore = false;
-let _firebaseError = false;
-// Версия документа Firestore, которую мы СЕЙЧАС считаем актуальной. Любая запись идёт
-// через транзакцию: если в Firestore уже более новая версия (чужое устройство успело
-// записать) — мы НЕ затираем её своим устаревшим состоянием, а принимаем свежее.
-// Это защита от массового отката данных «старым» табом/устройством.
+let _applyingRemoteState = false; // true, пока применяем ВХОДЯЩЕЕ обновление (storage другой вкладки / фоновый опрос) — saveState не пишет обратно, иначе вкладки зацикливают друг друга
+let _stateLoadedFromFirestore = false; // state загружен с сервера (имя историческое)
+let _firebaseError = false;            // ошибка связи с сервером (имя историческое)
+// Версия состояния на сервере, которую мы СЕЙЧАС считаем актуальной. Любая запись идёт
+// с baseRev: если на сервере уже более новая версия (чужое устройство успело
+// записать) — сервер отвечает 409, мы НЕ затираем её своим устаревшим состоянием,
+// а принимаем свежее. Это защита от массового отката данных «старым» табом/устройством.
 let _baseRev = 0;
+
+// Обёртка над fetch для защищённых эндпоинтов: подставляет токен, при 401
+// (сессия истекла/отозвана на сервере) — разлогинивает и показывает экран входа.
+async function apiFetch(path, opts = {}) {
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  const res = await fetch(API_BASE + path, Object.assign({}, opts, { headers }));
+  if (res.status === 401) { handleAuthExpired(); throw new Error('unauthorized'); }
+  return res;
+}
+
+function handleAuthExpired() {
+  authToken = null;
+  currentUser = null;
+  try { sessionStorage.removeItem('varka_session'); } catch(e) {}
+  const shell = document.getElementById('app-shell');
+  const login = document.getElementById('login-screen');
+  if (shell) shell.style.display = 'none';
+  if (login) {
+    login.style.display = 'flex';
+    const err = document.getElementById('login-error');
+    if (err) { err.style.color = 'var(--danger)'; err.textContent = 'Сессия истекла — войдите заново'; }
+  }
+}
 
 // ── pmStage: ЛОКАЛЬНЫЙ UI-выбор карточки-стадии в «Управлении производством» ──
 // Намеренно НЕ в state и НЕ в Firestore: это выбор конкретного устройства,
@@ -8288,26 +8334,31 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 // INIT
 // ════════════════════════════════════════════════════════════════════════════
 (async () => {
-  await initFirebase();
-  await loadState();
+  await initFirebase(); // ping api/report — доступен ли сервер
+  // Сессию восстанавливаем ДО loadState: серверное состояние читается только с токеном.
+  const restored = tryRestoreSession();
+  await loadState(); // с токеном — с сервера; без — localStorage-кэш (логотип/тема для экрана входа)
   applyTheme();
   document.getElementById('loading-screen').style.display = 'none';
 
-  // Баннер если Firebase недоступен
+  // Баннер если сервер недоступен
   if (_firebaseError || !_fbReady) {
     const banner = document.createElement('div');
     banner.id = 'firebase-error-banner';
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;text-align:center;padding:10px 16px;font-size:13px;font-weight:600;';
-    banner.innerHTML = '⚠️ Firebase недоступен — данные не синхронизируются. Работаете офлайн. Обновите страницу или проверьте соединение.';
+    banner.innerHTML = '⚠️ Сервер недоступен — данные не синхронизируются. Работаете офлайн. Обновите страницу или проверьте соединение.';
     document.body.prepend(banner);
   }
 
-  if (tryRestoreSession()) {
+  // authToken мог обнулиться внутри loadState (401 → handleAuthExpired) —
+  // тогда экран входа уже показан, в приложение не входим.
+  if (restored && authToken && currentUser) {
     enterApp();
-  } else {
+    if (_fbReady) setupFirestoreSync();
+  } else if (!document.getElementById('login-screen').style.display ||
+             document.getElementById('login-screen').style.display === 'none') {
     document.getElementById('login-screen').style.display = 'flex';
   }
-  if (_fbReady) setupFirestoreSync();
 })();
 
 // Клик вне карточек реактора — снимаем выбор

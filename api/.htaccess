@@ -1,0 +1,17 @@
+RewriteEngine On
+# Apache/mod_php не пробрасывает заголовок Authorization в PHP по умолчанию —
+# без этого requireAuth() в storage.php всегда получал бы пустой токен и 401.
+# (проверено на этом же хостинге в Tracker, api/.htaccess)
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+
+# config.php с данными БД и служебный import.php недоступны по HTTP.
+RewriteRule ^config\.php$         - [F,L]
+RewriteRule ^config\.php\.example$ - [F,L]
+RewriteRule ^import\.php$         - [F,L]
+
+RewriteRule ^auth$     auth.php     [L,QSA]
+RewriteRule ^logout$   logout.php   [L,QSA]
+RewriteRule ^state$    state.php    [L,QSA]
+RewriteRule ^activity$ activity.php [L,QSA]
+RewriteRule ^report$   report.php   [L,QSA]

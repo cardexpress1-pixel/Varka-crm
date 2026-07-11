@@ -1,0 +1,10 @@
+<?php
+// Скопируйте этот файл в config.php (через Менеджер файлов Plesk) и впишите
+// реальные данные БД из Plesk → Базы данных. config.php в git НЕ хранится.
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'manufacture_db');
+define('DB_USER', '');
+define('DB_PASS', '');
+
+// Origin, которому разрешены CORS-запросы к API (боевой адрес приложения).
+define('ALLOWED_ORIGIN', 'https://manufacture.varka.kz');
