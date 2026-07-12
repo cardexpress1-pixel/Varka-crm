@@ -1311,7 +1311,12 @@
   .nav-tab:hover .ni { animation: none !important; }
 }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous"></script>
+<!-- defer: без него это блокирующий синхронный <script src>, и если cdnjs медленно
+     отвечает/недоступен (сторонний CDN, флаки сети, блокировщики), парсер HTML
+     стоит на этой строке и ни один inline-скрипт ниже (включая init-код, который
+     скрывает "Подключение...") вообще не запускается. XLSX нужен только внутри
+     функций экспорта в Excel (по клику), не при загрузке страницы — defer безопасен. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous"></script>
 <!-- Firebase SDK (compat) -->
 <!-- Firebase SDK удалён: хранилище мигрировано на собственный REST API (api/) + MySQL, 2026-07-11 -->
 </head>
