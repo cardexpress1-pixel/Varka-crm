@@ -7,6 +7,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ВарКа">
 <meta name="mobile-web-app-capable" content="yes">
+<!-- Без этого Chrome/Windows-«автотёмная тема для веб-страниц» считает страницу
+     «не готовой к тёмной теме» (нет color-scheme) и НАСИЛЬНО инвертирует её цвета
+     поверх нашего собственного CSS — экран загрузки (и вся страница) выглядели
+     чёрными на машинах с системной тёмной темой, хотя сам CSS был светлым (тема
+     здесь переключается вручную через body.theme-light, не через OS-настройку). -->
+<meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f3f4f8">
 <link rel="manifest" href="manifest.json">
 <!-- Общий фавикон платформы (portal владеет /assets на корне домена varka.kz). -->
