@@ -1327,6 +1327,22 @@
 <!-- Firebase SDK удалён: хранилище мигрировано на собственный REST API (api/) + MySQL, 2026-07-11 -->
 </head>
 <body>
+<script>
+// Синхронно, ДО первой отрисовки: применяем класс темы сразу, не дожидаясь
+// конца async init-IIFE (после сетевых запросов). Раньше body получал
+// theme-light только в самом конце загрузки — всё время до этого страница
+// красилась в тёмные цвета :root по умолчанию (см. комментарий у
+// loading-screen ниже), что и выглядело как чёрный экран на каждом заходе.
+(function () {
+  try {
+    var cached = JSON.parse(localStorage.getItem('varka_state_v2') || '{}');
+    var isDark = cached.themeUserSet && cached.theme === 'dark';
+    if (!isDark) document.body.classList.add('theme-light');
+  } catch (e) {
+    document.body.classList.add('theme-light'); // безопасный дефолт при любой ошибке
+  }
+})();
+</script>
 <!-- ═══════════════ LOADING SCREEN ═══════════════ -->
 <!-- Цвета захардкожены (не var(--bg)/var(--accent)), потому что CSS-переменные темы
      резолвятся из :root, где по умолчанию задана ТЁМНАЯ тема (#0f1117) — а реальный
