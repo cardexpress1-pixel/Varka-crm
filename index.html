@@ -8539,11 +8539,22 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 // INIT
 // ════════════════════════════════════════════════════════════════════════════
 (async () => {
-  await initFirebase(); // ping api/report — доступен ли сервер
-  // Сессию восстанавливаем ДО loadState: серверное состояние читается только с токеном.
-  // Локальный логин Manufacture в приоритете; SSO портала — только если своей сессии нет.
-  let restored = tryRestoreSession();
-  if (!restored) restored = await trySso();
+  // initFirebase (ping api/report) и восстановление сессии (tryRestoreSession/trySso)
+  // не зависят друг от друга — раньше шли строго последовательно (report → whoami →
+  // state, три круговых сетевых обхода подряд), из-за чего именно SSO-вход (портал →
+  // Manufacture) держал экран "Подключение..." заметно дольше локального логина.
+  // Параллелим их через Promise.all; loadState() всё равно должен идти третьим —
+  // ему нужен authToken, который появляется только после восстановления сессии.
+  const [, restored] = await Promise.all([
+    initFirebase(),
+    (async () => {
+      // Сессию восстанавливаем ДО loadState: серверное состояние читается только с токеном.
+      // Локальный логин Manufacture в приоритете; SSO портала — только если своей сессии нет.
+      let r = tryRestoreSession();
+      if (!r) r = await trySso();
+      return r;
+    })(),
+  ]);
   await loadState(); // с токеном — с сервера; без — localStorage-кэш (логотип/тема для экрана входа)
   applyTheme();
   document.getElementById('loading-screen').style.display = 'none';
