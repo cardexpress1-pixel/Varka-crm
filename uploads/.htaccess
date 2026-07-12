@@ -1,0 +1,15 @@
+# Публичные статические файлы (сейчас — только логотип компании). Никаких
+# скриптов сюда не пишем и не исполняем — только картинки, добавленные
+# api/branding.php (fixed-filename, whitelisted extensions).
+<FilesMatch "\.(php|phtml|php\d)$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+</IfModule>

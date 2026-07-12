@@ -3401,6 +3401,34 @@ function applySidebarState() {
 // только если tryRestoreSession() не нашёл локальную сессию Manufacture —
 // локальный логин в приоритете, SSO — запасной путь.
 const SSO_ROLE_ID = '__portal_sso__';
+// Разовая миграция: раньше логотип хранился как base64 прямо в state.companyLogo
+// (до ~350КБ — половина всего state, качались целиком на каждой загрузке страницы).
+// При первом же входе админа после этой правки переносим его в статический файл
+// (api/branding.php) и оставляем в state только короткую ссылку. Fire-and-forget —
+// не блокирует вход; если сервер недоступен, просто попробуем на следующей загрузке.
+async function migrateLegacyLogo() {
+  if (!state.companyLogo || state.companyLogoUrl) return;
+  const role = getRoleById(currentUser.roleId);
+  if (!role || !role.tabs || !role.tabs.includes('admin')) return; // endpoint админ-only
+  try {
+    const res = await fetchWithTimeout(API_BASE + '/branding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
+      body: JSON.stringify({ dataUrl: state.companyLogo }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    state.companyLogoUrl = j.url;
+    delete state.companyLogo;
+    saveState();
+    applyBranding();
+    updateBrandingLogoPreview();
+    console.info('[Branding] логотип перенесён из state в статический файл:', j.url);
+  } catch (e) {
+    console.error('[Branding] миграция логотипа не удалась, попробуем при следующей загрузке:', e);
+  }
+}
+
 async function trySso() {
   // localStorage, не sessionStorage — портал открывает Manufacture в новой
   // вкладке (target=_blank), sessionStorage между вкладками не расшаривается.
@@ -7180,8 +7208,10 @@ function initBrandingSection() {
 function updateBrandingLogoPreview() {
   const preview = document.getElementById('branding-logo-preview');
   if (!preview) return;
-  if (state.companyLogo) {
-    preview.innerHTML = `<img src="${state.companyLogo}" style="max-height:40px; max-width:116px; object-fit:contain;" />`;
+  // companyLogo (legacy base64) — фолбэк на время до срабатывания migrateLegacyLogo().
+  const logoSrc = state.companyLogoUrl || state.companyLogo;
+  if (logoSrc) {
+    preview.innerHTML = `<img src="${logoSrc}" style="max-height:40px; max-width:116px; object-fit:contain;" />`;
   } else {
     preview.textContent = 'Нет логотипа';
   }
@@ -7222,17 +7252,45 @@ function uploadBrandingLogo(input) {
         if (dr < thresh && dg < thresh && db < thresh) px[i+3] = 0;
       }
       ctx.putImageData(data, 0, 0);
-      state.companyLogo = canvas.toDataURL('image/png');
-      updateBrandingLogoPreview();
-      applyBranding();
+      uploadBrandingLogoDataUrl(canvas.toDataURL('image/png'));
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-function removeBrandingLogo() {
-  state.companyLogo = null;
+// Заливает готовый dataURL на сервер как обычный статический файл (api/branding.php)
+// и оставляет в state только короткую ссылку — вместо ~350КБ base64 внутри самого
+// state, которые раньше качались целиком при КАЖДОЙ загрузке страницы (см. комментарий
+// у _getCachedRev в apiFetch-блоке).
+async function uploadBrandingLogoDataUrl(dataUrl) {
+  try {
+    const res = await fetchWithTimeout(API_BASE + '/branding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
+      body: JSON.stringify({ dataUrl }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    state.companyLogoUrl = j.url;
+    delete state.companyLogo; // на случай если ещё оставался старый base64-формат
+    updateBrandingLogoPreview();
+    applyBranding();
+  } catch (e) {
+    console.error('[Branding] загрузка логотипа не удалась:', e);
+    if (typeof showToast === 'function') showToast('Не удалось загрузить логотип — сервер недоступен');
+  }
+}
+
+async function removeBrandingLogo() {
+  try {
+    await fetchWithTimeout(API_BASE + '/branding', {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + authToken },
+    });
+  } catch (e) {}
+  state.companyLogoUrl = null;
+  delete state.companyLogo;
   const input = document.getElementById('branding-logo-input');
   if (input) input.value = '';
   updateBrandingLogoPreview();
@@ -7250,8 +7308,9 @@ function saveBranding() {
 function applyBranding() {
   const el = document.getElementById('nav-logo-area');
   if (!el) return;
-  if (state.companyLogo) {
-    el.innerHTML = `<img src="${state.companyLogo}" style="width:360px; height:95px; object-fit:contain; display:block;" />`;
+  const logoSrc = state.companyLogoUrl || state.companyLogo; // companyLogo — фолбэк до миграции
+  if (logoSrc) {
+    el.innerHTML = `<img src="${logoSrc}" style="width:360px; height:95px; object-fit:contain; display:block;" />`;
   } else if (state.companyName) {
     el.textContent = state.companyName;
     el.style.color = '';
@@ -8503,6 +8562,7 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
   if (restored && authToken && currentUser) {
     enterApp();
     if (_fbReady) setupFirestoreSync();
+    migrateLegacyLogo();
   } else if (!document.getElementById('login-screen').style.display ||
              document.getElementById('login-screen').style.display === 'none') {
     document.getElementById('login-screen').style.display = 'flex';
