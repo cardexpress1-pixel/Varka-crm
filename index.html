@@ -8547,6 +8547,9 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
   await loadState(); // с токеном — с сервера; без — localStorage-кэш (логотип/тема для экрана входа)
   applyTheme();
   document.getElementById('loading-screen').style.display = 'none';
+  // Временная диагностика: сколько реально держится экран "Подключение..." на
+  // конкретной машине пользователя, от старта навигации до этой строки.
+  console.info('[Perf] экран подключения скрыт через', Math.round(performance.now()), 'мс от начала навигации');
 
   // Баннер если сервер недоступен
   if (_firebaseError || !_fbReady) {
