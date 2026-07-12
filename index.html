@@ -3075,7 +3075,7 @@ function performCriticalBatchWrite(batchId, mutator, callbacks = {}, _retry = {}
 // токена). db=true означает «серверное хранилище доступно» для всего кода ниже.
 async function initFirebase() {
   try {
-    const res = await fetch(API_BASE + '/report', { cache: 'no-store' });
+    const res = await fetchWithTimeout(API_BASE + '/report', { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     db = true;
     _fbReady = true;
@@ -3373,7 +3373,7 @@ async function trySso() {
   const portalToken = localStorage.getItem('portal_token');
   if (!portalToken) return false;
   try {
-    const res = await fetch(API_BASE + '/whoami', {
+    const res = await fetchWithTimeout(API_BASE + '/whoami', {
       headers: { Authorization: 'Bearer ' + portalToken },
     });
     if (!res.ok) return false;
@@ -3841,6 +3841,22 @@ function autoAssignReactor(date, hours, runningLoads) {
 // Бэкенд: api/*.php на этом же поддомене (manufacture.varka.kz), см. api/storage.php.
 // ════════════════════════════════════════════════════════════════════════════
 const API_BASE = 'api';
+
+// Зависший fetch (сеть стучится, но не отвечает и не рвётся) без таймаута висит
+// бесконечно — при первой загрузке это держит экран "Подключение..." вечно, т.к.
+// initFirebase/loadState/trySso в init-IIFE никогда не дойдут до скрытия loading-screen.
+// Таймаут гарантирует, что await fetch когда-нибудь завершится (ошибкой) и код
+// пойдёт по уже существующей ветке catch → баннер "Сервер недоступен".
+async function fetchWithTimeout(url, opts = {}, ms = 10000) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, Object.assign({}, opts, { signal: controller.signal }));
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 let authToken = null;      // Bearer-токен серверной сессии (выдаёт api/auth)
 // db оставлен как флаг «серверное хранилище доступно» — весь остальной код
 // проверяет if (db) так же, как раньше проверял наличие Firestore.
@@ -3861,7 +3877,7 @@ let _baseRev = 0;
 async function apiFetch(path, opts = {}) {
   const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
   if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
-  const res = await fetch(API_BASE + path, Object.assign({}, opts, { headers }));
+  const res = await fetchWithTimeout(API_BASE + path, Object.assign({}, opts, { headers }));
   if (res.status === 401) { handleAuthExpired(); throw new Error('unauthorized'); }
   return res;
 }
