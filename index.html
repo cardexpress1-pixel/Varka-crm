@@ -3922,7 +3922,12 @@ async function fetchWithTimeout(url, opts = {}, ms = 10000) {
 let authToken = null;      // Bearer-токен серверной сессии (выдаёт api/auth)
 // db оставлен как флаг «серверное хранилище доступно» — весь остальной код
 // проверяет if (db) так же, как раньше проверял наличие Firestore.
-let db = null;
+// Стартует optimistically true (не null): loadState() и initFirebase() теперь
+// идут параллельно при старте (см. init-IIFE), поэтому loadState() не может
+// ждать подтверждения от initFirebase() перед первой попыткой — она и так
+// полностью защищена try/catch. initFirebase() скорректирует db на null,
+// если пинг реально покажет, что сервер недоступен.
+let db = true;
 let _fbReady = false;      // сервер доступен (имя сохранено, чтобы не трогать проверки по коду)
 let _snapshotIgnoreUntil = 0;
 let _applyingRemoteState = false; // true, пока применяем ВХОДЯЩЕЕ обновление (storage другой вкладки / фоновый опрос) — saveState не пишет обратно, иначе вкладки зацикливают друг друга
@@ -8539,23 +8544,39 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 // INIT
 // ════════════════════════════════════════════════════════════════════════════
 (async () => {
-  // initFirebase (ping api/report) и восстановление сессии (tryRestoreSession/trySso)
-  // не зависят друг от друга — раньше шли строго последовательно (report → whoami →
-  // state, три круговых сетевых обхода подряд), из-за чего именно SSO-вход (портал →
-  // Manufacture) держал экран "Подключение..." заметно дольше локального логина.
-  // Параллелим их через Promise.all; loadState() всё равно должен идти третьим —
-  // ему нужен authToken, который появляется только после восстановления сессии.
-  const [, restored] = await Promise.all([
-    initFirebase(),
-    (async () => {
-      // Сессию восстанавливаем ДО loadState: серверное состояние читается только с токеном.
-      // Локальный логин Manufacture в приоритете; SSO портала — только если своей сессии нет.
-      let r = tryRestoreSession();
-      if (!r) r = await trySso();
-      return r;
-    })(),
-  ]);
-  await loadState(); // с токеном — с сервера; без — localStorage-кэш (логотип/тема для экрана входа)
+  // Локальный логин Manufacture в приоритете — синхронно, без сети.
+  let restored = tryRestoreSession();
+  let ssoPromise = null;
+  if (!restored) {
+    const portalToken = localStorage.getItem('portal_token');
+    if (portalToken) {
+      // Оптимистично: выставляем токен-кандидат СРАЗУ и запускаем loadState() с ним
+      // параллельно с /whoami, не дожидаясь отдельного подтверждения — сервер и так
+      // валидирует тот же токен внутри requireAuth()/verifyPortalToken() при запросе
+      // /state (общий код storage.php). /whoami нужен отдельно только за именем и
+      // ролью для шапки/меню — эти данные не блокируют получение самого state.
+      // Раньше это были три сетевых круга подряд (report → whoami → state), из-за
+      // чего SSO-вход держал экран "Подключение..." заметно дольше локального логина.
+      authToken = portalToken;
+      ssoPromise = trySso();
+    }
+  }
+
+  await Promise.all([initFirebase(), loadState()]);
+
+  if (ssoPromise) {
+    const ssoOk = await ssoPromise;
+    if (ssoOk) {
+      restored = true;
+    } else if (!restored) {
+      // Токен-кандидат оказался невалиден — если loadState() ещё не сделал этого
+      // сам через 401 → handleAuthExpired(), подчищаем явно, чтобы не остаться
+      // молча залогиненными по неподтверждённому токену.
+      authToken = null;
+      currentUser = null;
+    }
+  }
+
   applyTheme();
   document.getElementById('loading-screen').style.display = 'none';
   // Временная диагностика: сколько реально держится экран "Подключение..." на
