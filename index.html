@@ -2678,18 +2678,46 @@ function applyStateMigrations() {
 // Загрузка состояния с сервера (GET api/state, требует токен). До входа в
 // систему состояние берётся только из localStorage-кэша (логотип/тема для
 // экрана логина) — серверное подтянется сразу после логина.
+// rev, на котором основан кэш в localStorage — переживает перезагрузку страницы
+// (в отличие от _baseRev, который раньше всегда стартовал с 0). Позволяет первой
+// же загрузке спросить сервер "?rev=N" вместо безусловного скачивания полного
+// state (~650КБ, из них до 350КБ — залогированный base64-логотип): если на
+// сервере тот же rev, приходит крошечный {"unchanged":true} и в ход идёт уже
+// закэшированный localStorage-снимок.
+function _getCachedRev() {
+  try { return parseInt(localStorage.getItem('varka_state_rev') || '0', 10) || 0; } catch(e) { return 0; }
+}
+function _persistStateCache() {
+  try {
+    localStorage.setItem('varka_state_v2', localStateJson());
+    localStorage.setItem('varka_state_rev', String(_baseRev));
+  } catch(e) {}
+}
+
 async function loadState() {
   let fromServer = false;
 
   if (db && authToken) {
     try {
-      const res = await apiFetch('/state');
+      const cachedRev = _getCachedRev();
+      const res = await apiFetch('/state' + (cachedRev ? '?rev=' + cachedRev : ''));
       if (res.ok) {
         const j = await res.json();
-        if (j.data) {
+        if (j.unchanged) {
+          // Сервер подтвердил: наш localStorage-кэш ещё актуален — используем его
+          // вместо повторной закачки полного блока (см. комментарий у _getCachedRev).
+          _baseRev = j.rev || cachedRev;
+          try {
+            const s = localStorage.getItem('varka_state_v2');
+            if (s) state = { ...state, ...JSON.parse(s) };
+          } catch(e) {}
+          fromServer = true;
+          _stateLoadedFromFirestore = true;
+          console.info('[API] состояние актуально (кэш) · rev', _baseRev);
+        } else if (j.data) {
           state = { ...state, ...j.data };
           _baseRev = j.rev || 0; // запоминаем версию, на которой основаны локальные данные
-          try { localStorage.setItem('varka_state_v2', localStateJson()); } catch(e) {}
+          _persistStateCache();
           fromServer = true;
           _stateLoadedFromFirestore = true;
           console.info('[API] состояние загружено · rev', _baseRev);
@@ -3030,6 +3058,7 @@ function saveState(onResult) {
       // Пароль роли ушёл на сервер (bcrypt) — убираем его из state в памяти.
       // На диск (localStorage/бэкап) пароль и так не попадал — там localStateJson.
       (state.roles || []).forEach(r => { if (r && 'password' in r) delete r.password; });
+      _persistStateCache(); // кэш и его rev теперь соответствуют подтверждённой версии на сервере
       if (onResult) onResult('ok');
     }).catch(err => {
       if (String(err.message) !== 'unauthorized') console.error('[API] saveState:', err);
@@ -3109,7 +3138,7 @@ function _applyRemoteState(data) {
   try {
     state = { ...state, ...data };
     _baseRev = data._rev || 0; // теперь локальные данные основаны на этой версии
-    try { localStorage.setItem('varka_state_v2', localStateJson()); } catch(e) {}
+    _persistStateCache();
     applyStateMigrations();
     render();
     const p = document.querySelector('.page.active');
