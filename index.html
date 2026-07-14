@@ -3131,11 +3131,13 @@ function performCriticalBatchWrite(batchId, mutator, callbacks = {}, _retry = {}
 // ════════════════════════════════════════════════════════════════════════════
 // API INIT / SYNC / ACTIVITY LOG (бывший Firebase-слой)
 // ════════════════════════════════════════════════════════════════════════════
-// Проверка доступности сервера через публичный эндпоинт (api/report не требует
-// токена). db=true означает «серверное хранилище доступно» для всего кода ниже.
+// Проверка доступности сервера через публичный health-check (api/ping — не
+// требует токена, не отдаёт данных проекта; api/report теперь требует
+// авторизацию для блока 'pulse', поэтому для простого пинга не годится).
+// db=true означает «серверное хранилище доступно» для всего кода ниже.
 async function initFirebase() {
   try {
-    const res = await fetchWithTimeout(API_BASE + '/report', { cache: 'no-store' });
+    const res = await fetchWithTimeout(API_BASE + '/ping', { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     db = true;
     _fbReady = true;
