@@ -61,10 +61,27 @@ foreach (($state['recipes'] ?? []) as $r) {
     if (isset($r['sku'])) $recipesBySku[$r['sku']] = $r;
 }
 
-$today = date('Y-m-d');
-$periodBatches = array_values(array_filter($batches, function ($b) use ($today) {
+// ?from=&to=YYYY-MM-DD — диапазон дат (общий пикер периода на дашборде
+// портала — тот же принцип, что client-side dashRange() в этом же проекте,
+// index.html). Невалидные/отсутствующие/будущие значения — тихий откат на
+// сегодня (для обоих по умолчанию, как и раньше — только один день).
+function resolveDate(string $raw, string $fallback): string {
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+        [$y, $m, $d] = array_map('intval', explode('-', $raw));
+        if (checkdate($m, $d, $y) && $raw <= $fallback) return $raw;
+    }
+    return $fallback;
+}
+$realToday = date('Y-m-d');
+$dateFrom = resolveDate((string)($_GET['from'] ?? ''), $realToday);
+$dateTo   = resolveDate((string)($_GET['to'] ?? ''), $realToday);
+if ($dateFrom > $dateTo) { [$dateFrom, $dateTo] = [$dateTo, $dateFrom]; }
+
+$periodBatches = array_values(array_filter($batches, function ($b) use ($dateFrom, $dateTo) {
     $status = $b['status'] ?? null;
-    return ($b['brewDate'] ?? null) === $today && $status !== 'deleted' && $status !== 'cancelled';
+    $brewDate = $b['brewDate'] ?? null;
+    return $brewDate !== null && $brewDate >= $dateFrom && $brewDate <= $dateTo
+        && $status !== 'deleted' && $status !== 'cancelled';
 }));
 
 $brewedStages = ['brewed', 'pouring', 'poured', 'finished'];
@@ -104,6 +121,8 @@ $reactorsFree = max(0, $reactorsTotal - $reactorsOccupied);
 echo json_encode([
     'project'   => 'manufacture',
     'ready'     => true,
+    'dateFrom'  => $dateFrom,
+    'dateTo'    => $dateTo,
     'updatedAt' => $row['updated_at'],
     'rev'       => (int)$row['rev'],
     'batches'   => ['total' => count($batches), 'byStatus' => $byStatus],
