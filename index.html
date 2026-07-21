@@ -3251,7 +3251,10 @@ async function renderActivityLog() {
   const el = document.getElementById('admin-activitylog-list');
   if (!el) return;
   if (!db) { el.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Сервер недоступен</div>'; return; }
-  el.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Загрузка...</div>';
+  // «Тихая загрузка» — платформенный паттерн (решение владельца 2026-07-21):
+  // пустая область вместо надписи «Загрузка...» на время запроса; итоговые
+  // состояния («Журнал пуст», «Сервер недоступен») остаются как были.
+  el.innerHTML = '';
   try {
     const res = await apiFetch('/activity');
     if (!res.ok) throw new Error('HTTP ' + res.status);
