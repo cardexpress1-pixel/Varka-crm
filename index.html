@@ -3397,9 +3397,10 @@ async function doLogout() {
   document.body.classList.remove('terminal-detail-open');
   try { sessionStorage.removeItem('varka_session'); } catch(e) {}
   document.getElementById('app-shell').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('login-password').value = '';
   _loggingOut = false;
+  // Единый вход платформы (решение владельца 2026-07-21): своей формы входа
+  // у Manufacture больше нет — после выхода уводим на портал varka.kz.
+  window.location.replace('https://varka.kz/');
 }
 
 function toggleSidebar() {
@@ -3985,17 +3986,11 @@ function handleAuthExpired() {
   currentUser = null;
   try { sessionStorage.removeItem('varka_session'); } catch(e) {}
   const shell = document.getElementById('app-shell');
-  const login = document.getElementById('login-screen');
   if (shell) shell.style.display = 'none';
-  if (login) {
-    login.style.display = 'flex';
-    // При штатном выходе (_loggingOut) 401 на фоновом /activity — не ошибка,
-    // сообщение не показываем.
-    if (!_loggingOut) {
-      const err = document.getElementById('login-error');
-      if (err) { err.style.color = 'var(--danger)'; err.textContent = 'Сессия истекла — войдите заново'; }
-    }
-  }
+  // Единый вход платформы (решение владельца 2026-07-21): своей формы входа у
+  // Manufacture больше нет — протухшая/отозванная сессия уводит на портал;
+  // при живом portal_token портал тихо переSSOшит обратно при следующем клике.
+  window.location.replace('https://varka.kz/');
 }
 
 // ── pmStage: ЛОКАЛЬНЫЙ UI-выбор карточки-стадии в «Управлении производством» ──
@@ -8626,9 +8621,10 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
     enterApp();
     if (_fbReady) setupFirestoreSync();
     migrateLegacyLogo();
-  } else if (!document.getElementById('login-screen').style.display ||
-             document.getElementById('login-screen').style.display === 'none') {
-    document.getElementById('login-screen').style.display = 'flex';
+  } else {
+    // Единый вход платформы (решение владельца 2026-07-21): без сессии и без
+    // успешного SSO своей формы входа нет — сразу на портал varka.kz.
+    window.location.replace('https://varka.kz/');
   }
 })();
 
