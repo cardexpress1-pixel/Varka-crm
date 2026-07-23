@@ -215,9 +215,10 @@ function currentSession(): ?array {
 // В Manufacture роль = должность (admin/operator/warshchik/intake — набор
 // вкладок), не человек, поэтому уровни портала view/edit нельзя однозначно
 // сопоставить с конкретной ролью-должностью. SSO пускает ТОЛЬКО уровень
-// 'admin' (полный доступ, tabs/fields не нужны для проверки — is_admin даёт
-// fullAccess) — открытый вопрос про персональные роли для остальных уровней
-// зафиксирован в 01_IDENTITY_SERVICE_SPEC.md, раздел 6, решается отдельно.
+// 'admin' — полный доступ (is_admin, tabs не нужны); 'edit'/'view' — реальная
+// роль-должность по имени job_title из портала (см. elseif ниже, 2026-07-23);
+// 'none'/нет должности — отказ. Открытый вопрос из 01_IDENTITY_SERVICE_SPEC.md
+// (раздел 6) про персональные роли закрыт этим маппингом.
 //
 // Кэш в отдельной таблице (не JSON-файл — Manufacture целиком на MySQL),
 // TTL 60 сек, чтобы не бить по сети на каждый запрос.
@@ -266,6 +267,33 @@ function verifyPortalToken(string $token): ?array {
                 'is_admin'   => 1,
                 'expires_at' => $now + 60 * 60 * 24 * 7,
             ];
+        } elseif ($level === 'edit' || $level === 'view') {
+            // Не-админ портала (2026-07-23, инцидент «вчера работал — сегодня
+            // нет»): после отказа от локальных форм входа (единый вход через
+            // портал) сотрудники теряли доступ вовсе — SSO пускал только
+            // admin. Теперь уровень edit/view маппится на РЕАЛЬНУЮ
+            // роль-должность по имени: job_title из портала == roles.name
+            // (например «Директор»). Дальше всё как при обычном локальном
+            // входе под должностью: whoami отдаёт реальную роль, клиентский
+            // getRoleById работает без синтетики. Нет должности с таким
+            // именем — SSO не пускает (null → портал), это осознанно:
+            // без должности непонятно, какие вкладки показывать.
+            $jobTitle = trim((string) ($data['job_title'] ?? ''));
+            if ($jobTitle !== '') {
+                $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE LOWER(TRIM(name)) = LOWER(?)');
+                $rq->execute([$jobTitle]);
+                $role = $rq->fetch();
+                if ($role) {
+                    $session = [
+                        'token'      => $token,
+                        'role_id'    => $role['id'],
+                        'login'      => $data['email'] ?? ('portal:' . $data['user_id']),
+                        'name'       => $data['full_name'] ?? ($data['email'] ?? 'Портал'),
+                        'is_admin'   => (int) $role['is_admin'],
+                        'expires_at' => $now + 60 * 60 * 24 * 7,
+                    ];
+                }
+            }
         }
     }
 
