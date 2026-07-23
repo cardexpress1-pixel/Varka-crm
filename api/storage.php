@@ -23,8 +23,32 @@ function pdo(): PDO {
              PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
         );
         bootstrapSchema($pdo);
+        ensureViewerRole($pdo);
     }
     return $pdo;
+}
+
+// Роль «Просмотр» (решение владельца 2026-07-23): для сотрудников портала,
+// которым Производство нужно только смотреть — назначается в модалке
+// сотрудника на портале, как остальные роли. Честность набора вкладок:
+// серверного read-only в Производстве нет, поэтому роли даны только
+// просмотровые экраны без рабочих кнопок (дашборд, отчёты, журнал).
+// Локального пароля нет (случайный хеш) — вход только через SSO портала.
+// Идемпотентный сид со своим флаг-файлом: .schema_ok на проде уже стоит,
+// bootstrapSchema() не перезапустится. Дальше роль живёт как обычная —
+// редактируется/удаляется в редакторе ролей админки (флаг не даст сиду
+// воскресить осознанно удалённую роль).
+function ensureViewerRole(PDO $pdo): void {
+    $flag = __DIR__ . '/.viewerrole_ok';
+    if (file_exists($flag)) return;
+    $pdo->prepare("INSERT IGNORE INTO roles (id, name, login, password_hash, is_admin, tabs, fields)
+                   VALUES ('viewer', 'Просмотр', 'viewer', ?, 0, ?, ?)")
+        ->execute([
+            password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT),
+            json_encode(['dashboard', 'reports', 'journal']),
+            json_encode(['client' => true, 'note' => true, 'priority' => true]),
+        ]);
+    file_put_contents($flag, date('c'));
 }
 
 // Схема создаётся один раз: флаг-файл рядом с data-каталогом снимает 6× DDL
