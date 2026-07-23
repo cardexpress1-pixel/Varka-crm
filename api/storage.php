@@ -255,8 +255,13 @@ function verifyPortalToken(string $token): ?array {
     $session = null;
     if (is_array($data) && !empty($data['permissions'])) {
         $level = 'none';
+        $portalRoleId = null;
         foreach ($data['permissions'] as $p) {
-            if (($p['project_code'] ?? '') === 'manufacture') { $level = $p['level']; break; }
+            if (($p['project_code'] ?? '') === 'manufacture') {
+                $level = $p['level'];
+                $portalRoleId = $p['project_role_id'] ?? null;
+                break;
+            }
         }
         if ($level === 'admin') {
             $session = [
@@ -267,11 +272,28 @@ function verifyPortalToken(string $token): ?array {
                 'is_admin'   => 1,
                 'expires_at' => $now + 60 * 60 * 24 * 7,
             ];
+        } elseif (($level === 'edit' || $level === 'view') && $portalRoleId !== null && $portalRoleId !== '') {
+            // Сотрудник (не-админ портала): роль Производства назначается
+            // ЯВНО в модалке сотрудника на портале (permissions.project_role_id,
+            // выбор из api/roles.php — решение владельца 2026-07-23; должность
+            // из портала — информационное поле, в механике не участвует).
+            // Роль по id — дальше всё как при локальном входе под должностью:
+            // whoami отдаёт реальную роль, клиент без синтетики, права ровно
+            // те, что у роли. Роль не назначена/удалена — отказ (null → портал).
+            $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE id = ?');
+            $rq->execute([$portalRoleId]);
+            $role = $rq->fetch();
+            if ($role) {
+                $session = [
+                    'token'      => $token,
+                    'role_id'    => $role['id'],
+                    'login'      => $data['email'] ?? ('portal:' . $data['user_id']),
+                    'name'       => $data['full_name'] ?? ($data['email'] ?? 'Портал'),
+                    'is_admin'   => (int) $role['is_admin'],
+                    'expires_at' => $now + 60 * 60 * 24 * 7,
+                ];
+            }
         }
-        // job_title-маппинг (62f20f2) откачен в тот же день: владелец явно
-        // указал, что должность в портале — информационное поле, система не
-        // должна отрабатывать на него вообще. Механизм входа сотрудников
-        // (не-админов) решается отдельно — см. обсуждение 2026-07-23.
     }
 
     // Кэшируем и отрицательный результат — иначе невалидный/недостаточный
