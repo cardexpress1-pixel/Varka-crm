@@ -130,6 +130,12 @@
   .nav { display: flex; align-items: center; gap: 0; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; height: 64px; position: sticky; top: 0; z-index: 100; overflow: visible; }
   .nav-logo { font-weight: 800; font-size: 18px; color: var(--accent); letter-spacing: -0.5px; flex-shrink: 0; }
   .nav-logo span { color: var(--text2); font-weight: 400; }
+  /* Логотип брендинга. Высота — под шапку, ширина по пропорции: если задать боксу
+     фиксированную ширину, object-fit:contain отцентрирует картинку внутри него и
+     логотип визуально уедет от левого края. object-position:left — страховка на
+     случай, если max-width всё же ограничит ширину. */
+  .nav-logo img { display: block; height: 44px; width: auto; max-width: 240px;
+                  object-fit: contain; object-position: left center; }
   .nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding-left: 12px; }
   .badge-count { background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 6px; }
   .user-chip { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
@@ -1015,6 +1021,7 @@
     .grid-3 { grid-template-columns: 1fr 1fr; }
     .nav { padding: 0 14px; height: 48px; }
     .nav-logo { font-size: 15px; }
+    .nav-logo img { height: 32px; max-width: 180px; }
   }
 
   /* Tablets portrait 600–768px */
@@ -1084,6 +1091,7 @@
     .ing-fact { width: 64px; font-size: 13px; }
     .nav-logo { font-size: 14px; }
     .nav { padding: 0 10px; height: 46px; }
+    .nav-logo img { height: 30px; max-width: 150px; }
     .login-box { padding: 24px 18px; }
     .role-select { gap: 6px; }
     .role-btn { padding: 10px 5px; }
@@ -1133,6 +1141,7 @@
     .stat-num { font-size: 16px; }
     .nav { height: 44px; padding: 0 8px; }
     .nav-logo { font-size: 13px; }
+    .nav-logo img { height: 28px; max-width: 120px; }
     .cal-day { min-height: 36px; }
     .reactor-badge { width: 30px; height: 30px; font-size: 11px; }
     .batch-name { font-size: 12px; }
@@ -7378,11 +7387,38 @@ function uploadBrandingLogo(input) {
         if (dr < thresh && dg < thresh && db < thresh) px[i+3] = 0;
       }
       ctx.putImageData(data, 0, 0);
-      uploadBrandingLogoDataUrl(canvas.toDataURL('image/png'));
+      // Логотипы почти всегда экспортируют с запасом по краям. Прозрачным этот
+      // запас стал строкой выше, но размер холста прежний — и в шапке он читается
+      // как «логотип съехал от левого края». Обрезаем по реальному контуру.
+      uploadBrandingLogoDataUrl(cropTransparentEdges(canvas).toDataURL('image/png'));
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+// Обрезает холст по bounding box непрозрачных пикселей. Если непрозрачных нет
+// (например, фон «съел» всю картинку) — возвращает исходный холст, чтобы не
+// отдать наверх пустое изображение.
+function cropTransparentEdges(canvas) {
+  const w = canvas.width, h = canvas.height;
+  const px = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (px[(y * w + x) * 4 + 3] === 0) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return canvas;
+  const out = document.createElement('canvas');
+  out.width  = maxX - minX + 1;
+  out.height = maxY - minY + 1;
+  out.getContext('2d').drawImage(canvas, minX, minY, out.width, out.height, 0, 0, out.width, out.height);
+  return out;
 }
 
 // Заливает готовый dataURL на сервер как обычный статический файл (api/branding.php)
@@ -7436,7 +7472,9 @@ function applyBranding() {
   if (!el) return;
   const logoSrc = state.companyLogoUrl || state.companyLogo; // companyLogo — фолбэк до миграции
   if (logoSrc) {
-    el.innerHTML = `<img src="${logoSrc}" style="width:360px; height:95px; object-fit:contain; display:block;" />`;
+    // Размеры — в CSS (.nav-logo img), чтобы работали media-запросы: на мобильных
+    // шапка ниже 64px, а inline-стиль оттуда не перебить.
+    el.innerHTML = `<img src="${logoSrc}" alt="" />`;
   } else if (state.companyName) {
     el.textContent = state.companyName;
     el.style.color = '';
