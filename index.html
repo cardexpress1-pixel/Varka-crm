@@ -7337,43 +7337,59 @@ function openAdminSection(name) {
 // под токеном портала, тот же домен), не дожидаясь их первого входа; слитый с локально
 // назначенными ролями (/sso-users). Если портал недоступен (или админ не портальный) —
 // фолбэк на тех, кто уже заходил. Роли — из state.roles («Просмотр» — дефолт, прячем).
+// Последний показанный список — чтобы при повторном заходе в раздел не мигала
+// «Загрузка…»: сразу рисуем то, что уже видели, а свежие данные подтягиваем
+// фоном и перерисовываем, только если они изменились.
+let _ssoUsersCache = null;
+
 async function renderSsoUsersList() {
   const box = document.getElementById('sso-users-list');
   if (!box) return;
-  box.innerHTML = '<div style="padding:12px;color:var(--text2);">Загрузка…</div>';
+  if (_ssoUsersCache) {
+    paintSsoUsersList(box, _ssoUsersCache);        // мгновенно, без «Загрузка…»
+  } else {
+    box.innerHTML = '<div style="padding:12px;color:var(--text2);">Загрузка…</div>';
+  }
 
-  // Локально назначенные роли (по кому уже есть строка в sso_role_map).
+  // Оба источника параллельно (а не по очереди) + таймаут на портал, чтобы
+  // раздел не «висел», если портал долго отвечает.
+  const pt = (() => { try { return localStorage.getItem('portal_token'); } catch (e) { return null; } })();
+  const [assignedRes, rosterRes] = await Promise.all([
+    // Локально сохранённые уровни (кому что назначено внутри Производства).
+    apiFetch('/sso-users').then(r => r.json()).catch(() => null),
+    // Ростер: все с доступом к Производству на портале — не дожидаясь их входа.
+    pt ? fetchWithTimeout('https://varka.kz/api/permissions',
+                          { headers: { 'Authorization': 'Bearer ' + pt } }, 8000)
+           .then(r => r.ok ? r.json() : null).catch(() => null)
+       : Promise.resolve(null),
+  ]);
+
   const assigned = {};
-  try {
-    const res = await apiFetch('/sso-users');
-    const data = await res.json();
-    (data.users || []).forEach(u => { assigned[u.portal_user_id] = u; });
-  } catch (e) { /* эндпоинт недоступен — покажем что сможем */ }
+  ((assignedRes && assignedRes.users) || []).forEach(u => { assigned[u.portal_user_id] = u; });
 
-  // Ростер: все с доступом к Производству на портале (не дожидаясь входа).
-  let roster = null;
-  try {
-    const pt = localStorage.getItem('portal_token');
-    if (pt) {
-      const pr = await fetch('https://varka.kz/api/permissions', { headers: { 'Authorization': 'Bearer ' + pt } });
-      if (pr.ok) {
-        const pd = await pr.json();
-        roster = (pd.permissions || [])
-          .filter(p => p.project_code === 'manufacture' && p.level !== 'none')
-          .map(p => ({ portal_user_id: p.user_id, name: p.full_name, email: p.email, job_title: p.job_title }));
-      }
-    }
-  } catch (e) { /* портал недоступен — фолбэк на локальный список ниже */ }
+  const roster = rosterRes && rosterRes.permissions
+    ? rosterRes.permissions
+        .filter(p => p.project_code === 'manufacture' && p.level !== 'none')
+        .map(p => ({ portal_user_id: p.user_id, name: p.full_name, email: p.email, job_title: p.job_title }))
+    : null;
 
+  // Склейка: личность и должность — из портала, уровень — из карты Производства.
   const list = roster
-    ? roster.map(r => ({ portal_user_id: r.portal_user_id, name: r.name, email: r.email,
-        role_id: assigned[r.portal_user_id] ? assigned[r.portal_user_id].role_id : null }))
+    ? roster.map(r => ({ ...r, ...(assigned[r.portal_user_id] || {}), job_title: r.job_title, name: r.name, email: r.email }))
     : Object.values(assigned);
 
   if (!list.length) {
+    _ssoUsersCache = null;
     box.innerHTML = '<div style="padding:12px;color:var(--text2);">Пока никому не выдан доступ к Производству. Выдайте на портале: varka.kz → «Пользователи и права».</div>';
     return;
   }
+  // Ничего не изменилось — не трогаем DOM (иначе открытый список схлопнется).
+  if (_ssoUsersCache && JSON.stringify(_ssoUsersCache) === JSON.stringify(list)) return;
+  _ssoUsersCache = list;
+  paintSsoUsersList(box, list);
+}
+
+function paintSsoUsersList(box, list) {
   // Здесь назначается ТОЛЬКО уровень доступа. Должность берётся из карточки
   // сотрудника на портале (там она и заводится) и сопоставляется с ролью
   // Производства по названию — второй раз её не спрашиваем. Что видит каждая
@@ -7425,6 +7441,12 @@ async function saveSsoUserRole(sel) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { showToast(data.error || 'Ошибка сохранения'); return; }
+    // Держим кэш в актуальном состоянии — иначе при следующем заходе в раздел
+    // на миг показался бы прежний уровень.
+    if (_ssoUsersCache) {
+      const row2 = _ssoUsersCache.find(x => String(x.portal_user_id) === String(uid));
+      if (row2) row2.level = level;
+    }
     showToast('Доступ сохранён');
   } catch (e) {
     showToast('Ошибка сети');
