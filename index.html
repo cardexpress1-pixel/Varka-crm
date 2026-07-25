@@ -1883,6 +1883,11 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
         <div class="admin-menu-text"><div class="admin-menu-title">Роли</div><div class="admin-menu-sub">Логины, пароли, доступ к вкладкам и полям</div></div>
         <span class="admin-menu-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
       </div>
+      <div class="admin-menu-row" onclick="openAdminSection('access')">
+        <span class="admin-menu-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11l-3 3-1.5-1.5"/></svg></span>
+        <div class="admin-menu-text"><div class="admin-menu-title">Доступы</div><div class="admin-menu-sub">Роль-должность сотрудникам портала</div></div>
+        <span class="admin-menu-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
       <div class="admin-menu-row" onclick="openAdminSection('clients')">
         <span class="admin-menu-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ami ami-users"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
         <div class="admin-menu-text"><div class="admin-menu-title">Клиенты</div><div class="admin-menu-sub">Список заказчиков для оператора</div></div>
@@ -1999,6 +2004,19 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
         <button class="btn btn-ghost btn-sm" onclick="confirmResetRolesToDefault()">Сбросить все роли к стандартным</button>
         <div class="field-hidden-note" style="margin-top:4px;">Удалит все созданные роли и вернёт исходные admin/operator/warshchik/intake со стандартными паролями.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Раздел: Доступы (сотрудники портала → роль-должность) ── -->
+  <div id="admin-section-access" class="admin-section" style="display:none;">
+    <button class="admin-back-btn" onclick="closeAdminSection()">← Назад</button>
+    <div class="setup-box">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+        <h3>Доступы сотрудников</h3>
+        <button class="btn btn-ghost btn-sm" onclick="renderSsoUsersList()">↻ Обновить</button>
+      </div>
+      <p>Доступ к Производству выдаётся на портале (varka.kz → «Пользователи и права»). Здесь вы назначаете каждому его роль-должность. Сотрудник появляется в списке после первого входа. Пока роль не назначена — действует «Просмотр».</p>
+      <div id="sso-users-list" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;"></div>
     </div>
   </div>
 
@@ -7224,7 +7242,61 @@ function openAdminSection(name) {
   if (name === 'recipes') state.recipesSelectedCategory = null;
   if (name === 'branding') initBrandingSection();
   if (name === 'activitylog') renderActivityLog();
+  if (name === 'access') renderSsoUsersList();
   renderAdmin();
+}
+
+// ── Доступы: сотрудники портала → роль-должность (2026-07-25, «галочная» модель) ──
+// Портал даёт только факт доступа; конкретную роль назначаем здесь. Список из
+// GET /sso-users (строка появляется после первого SSO-входа сотрудника). Роли —
+// из state.roles (уже загружены; «Просмотр» — дефолт, поэтому в списке его прячем).
+async function renderSsoUsersList() {
+  const box = document.getElementById('sso-users-list');
+  if (!box) return;
+  box.innerHTML = '<div style="padding:12px;color:var(--text2);">Загрузка…</div>';
+  let users = [];
+  try {
+    const res = await apiFetch('/sso-users');
+    const data = await res.json();
+    users = (data && data.users) || [];
+  } catch (e) {
+    box.innerHTML = '<div style="padding:12px;color:var(--danger);">Не удалось загрузить список</div>';
+    return;
+  }
+  if (!users.length) {
+    box.innerHTML = '<div style="padding:12px;color:var(--text2);">Пока никто не заходил. Выдайте доступ на портале и попросите сотрудника войти один раз — он появится здесь.</div>';
+    return;
+  }
+  const roles = (state.roles || []).filter(r => r.id !== 'viewer');
+  box.innerHTML = users.map(u => {
+    const opts = ['<option value="">— Просмотр (по умолчанию) —</option>']
+      .concat(roles.map(r => `<option value="${escapeHtml(r.id)}" ${u.role_id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}</option>`))
+      .join('');
+    const who = escapeHtml(u.name || u.email || ('ID ' + u.portal_user_id));
+    const sub = (u.email && u.name) ? escapeHtml(u.email) : '';
+    return `
+      <div style="display:flex; align-items:center; gap:10px; background:var(--surface3); border-radius:8px; padding:8px 12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:140px;">
+          <div style="font-size:14px; font-weight:600;">${who}</div>
+          ${sub ? `<div style="font-size:12px; color:var(--text2);">${sub}</div>` : ''}
+        </div>
+        <select onchange="saveSsoUserRole(${u.portal_user_id}, this.value)" style="min-width:190px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text);">${opts}</select>
+      </div>`;
+  }).join('');
+}
+
+async function saveSsoUserRole(portalUserId, roleId) {
+  try {
+    const res = await apiFetch('/sso-users', {
+      method: 'POST',
+      body: JSON.stringify({ portal_user_id: portalUserId, role_id: roleId || null }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || 'Ошибка сохранения'); return; }
+    showToast('Роль сохранена');
+  } catch (e) {
+    showToast('Ошибка сети');
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════

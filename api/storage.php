@@ -24,8 +24,30 @@ function pdo(): PDO {
         );
         bootstrapSchema($pdo);
         ensureViewerRole($pdo);
+        ensureSsoRoleMapTable($pdo);
     }
     return $pdo;
+}
+
+// Карта «сотрудник портала → роль-должность Производства» (2026-07-25, переход на
+// «галочную» модель: портал даёт только доступ, а КОНКРЕТНУЮ роль назначает админ
+// ВНУТРИ Производства — Настройки → Доступы). Ключ — стабильный portal_user_id;
+// email/name — для показа в списке. role_id NULL = роль ещё не назначена (действует
+// минимальный «Просмотр»). Строка появляется сама при первом SSO-входе сотрудника.
+// Идемпотентная миграция со своим флаг-файлом: на проде .schema_ok уже стоит,
+// bootstrapSchema() не перезапустится (как ensureViewerRole).
+function ensureSsoRoleMapTable(PDO $pdo): void {
+    $flag = __DIR__ . '/.ssorolemap_ok';
+    if (file_exists($flag)) return;
+    $pdo->exec("CREATE TABLE IF NOT EXISTS sso_role_map (
+        portal_user_id INT NOT NULL PRIMARY KEY,
+        email VARCHAR(190) NULL,
+        name VARCHAR(190) NULL,
+        role_id VARCHAR(64) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    file_put_contents($flag, date('c'));
 }
 
 // Роль «Просмотр» (решение владельца 2026-07-23): для сотрудников портала,
@@ -287,33 +309,67 @@ function verifyPortalToken(string $token): ?array {
                 break;
             }
         }
-        if ($level === 'admin') {
-            $session = [
-                'token'      => $token,
-                'role_id'    => null,
-                'login'      => $data['email'] ?? ('portal:' . $data['user_id']),
-                'name'       => $data['full_name'] ?? ($data['email'] ?? 'Портал'),
-                'is_admin'   => 1,
-                'expires_at' => $now + 60 * 60 * 24 * 7,
-            ];
-        } elseif (($level === 'edit' || $level === 'view') && $portalRoleId !== null && $portalRoleId !== '') {
-            // Сотрудник (не-админ портала): роль Производства назначается
-            // ЯВНО в модалке сотрудника на портале (permissions.project_role_id,
-            // выбор из api/roles.php — решение владельца 2026-07-23; должность
-            // из портала — информационное поле, в механике не участвует).
-            // Роль по id — дальше всё как при локальном входе под должностью:
-            // whoami отдаёт реальную роль, клиент без синтетики, права ровно
-            // те, что у роли. Роль не назначена/удалена — отказ (null → портал).
-            $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE id = ?');
-            $rq->execute([$portalRoleId]);
-            $role = $rq->fetch();
-            if ($role) {
+        // «Галочная» модель (2026-07-25): портал даёт только ДОСТУП (любой уровень !=
+        // none), а конкретную роль-должность назначает админ ВНУТРИ Производства
+        // (Настройки → Доступы, таблица sso_role_map). Уровни view/edit/admin с
+        // портала больше не решают роль напрямую — они лишь «пускать/нет».
+        if ($level !== 'none') {
+            $uid   = (int) ($data['user_id'] ?? 0);
+            $email = $data['email'] ?? null;
+            $name  = $data['full_name'] ?? ($email ?? 'Портал');
+            $login = $email ?? ('portal:' . $uid);
+
+            // Запомнить/обновить личность в карте доступов (роль НЕ трогаем — её
+            // ставит админ). Строка появляется при первом входе — тогда сотрудник
+            // виден в «Настройки → Доступы».
+            if ($uid > 0) {
+                $db->prepare('INSERT INTO sso_role_map (portal_user_id, email, name) VALUES (?, ?, ?)
+                              ON DUPLICATE KEY UPDATE email = VALUES(email), name = VALUES(name)')
+                   ->execute([$uid, $email, $name]);
+            }
+
+            $roleId = null; $isAdmin = 0; $resolved = false;
+
+            // 1) Явно назначенная внутри Производства роль — приоритет.
+            if ($uid > 0) {
+                $mid = $db->prepare('SELECT role_id FROM sso_role_map WHERE portal_user_id = ?');
+                $mid->execute([$uid]);
+                $mapped = $mid->fetchColumn();
+                if ($mapped) {
+                    $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE id = ?');
+                    $rq->execute([$mapped]);
+                    if ($role = $rq->fetch()) { $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true; }
+                }
+            }
+
+            // 2) Переходный fallback (пока роль не назначили внутри) — сохраняет
+            //    прежнее поведение, чтобы деплой никого не выкинул: портальный admin →
+            //    админ (bootstrap, чтобы было кому раздать роли), иначе прежний
+            //    project_role_id с портала.
+            if (!$resolved) {
+                if ($level === 'admin') {
+                    $isAdmin = 1; $resolved = true; // role_id=null → whoami даёт синт. админа
+                } elseif ($portalRoleId !== null && $portalRoleId !== '') {
+                    $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE id = ?');
+                    $rq->execute([$portalRoleId]);
+                    if ($role = $rq->fetch()) { $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true; }
+                }
+            }
+
+            // 3) Доступ есть, роль не определена → минимальный «Просмотр» (viewer).
+            if (!$resolved) {
+                if ($role = $db->query("SELECT id, is_admin FROM roles WHERE id = 'viewer'")->fetch()) {
+                    $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true;
+                }
+            }
+
+            if ($resolved) {
                 $session = [
                     'token'      => $token,
-                    'role_id'    => $role['id'],
-                    'login'      => $data['email'] ?? ('portal:' . $data['user_id']),
-                    'name'       => $data['full_name'] ?? ($data['email'] ?? 'Портал'),
-                    'is_admin'   => (int) $role['is_admin'],
+                    'role_id'    => $roleId,
+                    'login'      => $login,
+                    'name'       => $name,
+                    'is_admin'   => $isAdmin,
                     'expires_at' => $now + 60 * 60 * 24 * 7,
                 ];
             }
