@@ -28,6 +28,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405); echo json_encode(['error' => 'Method not allowed']); exit;
 }
 
+// Уровень «Просмотр» (2026-07-25) — только чтение: сохранение состояния запрещено.
+// Это ЕДИНСТВЕННАЯ точка записи данных приложения (клиент шлёт сюда весь state),
+// поэтому одной проверки достаточно, чтобы «Просмотр» ничего не изменил. Клиент
+// дополнительно прячет кнопки, но источник правды — здесь.
+if (sessionLevel($session) === 'viewer') {
+    http_response_code(403);
+    echo json_encode(['error' => 'Уровень «Просмотр» не может изменять данные'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $body = jsonBody();
 if (!isset($body['data']) || !is_array($body['data'])) {
     http_response_code(400); echo json_encode(['error' => 'data required']); exit;

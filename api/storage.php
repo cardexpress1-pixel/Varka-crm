@@ -25,8 +25,39 @@ function pdo(): PDO {
         bootstrapSchema($pdo);
         ensureViewerRole($pdo);
         ensureSsoRoleMapTable($pdo);
+        ensureSsoLevelColumn($pdo);
     }
     return $pdo;
+}
+
+// Уровень доступа сотрудника портала (2026-07-25, единое понятие доступов).
+// ДВЕ независимые вещи: role_id = ДОЛЖНОСТЬ (какие разделы видит, модель
+// Производства) и level = УРОВЕНЬ (что может делать) — как в любом стороннем
+// сервисе: viewer «Просмотр» / manager «Редактирование» / admin «Админ».
+// Колонка добавляется отдельной идемпотентной миграцией: таблица sso_role_map уже
+// создана на проде предыдущим релизом, её флаг-файл не перезапустится.
+function ensureSsoLevelColumn(PDO $pdo): void {
+    $flag = __DIR__ . '/.ssolevel_ok';
+    if (file_exists($flag)) return;
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?'
+    );
+    $stmt->execute(['sso_role_map', 'level']);
+    if ((int) $stmt->fetchColumn() === 0) {
+        $pdo->exec("ALTER TABLE sso_role_map
+                    ADD COLUMN level ENUM('viewer','manager','admin') NOT NULL DEFAULT 'viewer' AFTER role_id");
+    }
+    file_put_contents($flag, date('c'));
+}
+
+// Уровень текущей сессии. У локальных входов (вход под должностью с паролем)
+// колонки level нет — поведение сохраняем прежним: админ → admin, остальные →
+// manager (могут работать и сохранять, как и до введения уровней).
+function sessionLevel(array $session): string {
+    $lvl = $session['level'] ?? null;
+    if (in_array($lvl, ['viewer', 'manager', 'admin'], true)) return $lvl;
+    return ((int) ($session['is_admin'] ?? 0)) ? 'admin' : 'manager';
 }
 
 // Карта «сотрудник портала → роль-должность Производства» (2026-07-25, переход на
@@ -328,55 +359,62 @@ function verifyPortalToken(string $token): ?array {
                    ->execute([$uid, $email, $name]);
             }
 
-            $roleId = null; $isAdmin = 0; $resolved = false;
+            // ДВЕ НЕЗАВИСИМЫЕ ВЕЩИ (2026-07-25, единое понятие доступов):
+            //   role_id     — ДОЛЖНОСТЬ: какие разделы (вкладки) человек видит;
+            //   accessLevel — УРОВЕНЬ: что он может делать (viewer/manager/admin),
+            //                 одинаково во всех проектах платформы.
+            // Обе назначает админ внутри Производства (Настройки → Доступы).
+            $roleId = null;
+            $accessLevel = null;
 
-            // 1) Портальный админ — ВСЕГДА админ Производства (bootstrap). Это
-            //    исключает самоблокировку (админ не «снимет» админа с себя через
-            //    карту) и гарантирует, что всегда есть кому раздавать роли.
-            //    Роль внутри Производства ему не назначается. role_id=null →
-            //    whoami отдаёт синтетического админа с полным набором вкладок.
-            if ($level === 'admin') {
-                $isAdmin = 1; $resolved = true;
-            }
-
-            // 2) Остальные (доступ «по галочке») — роль из карты Производства
-            //    (Настройки → Доступы) имеет приоритет.
-            if (!$resolved && $uid > 0) {
-                $mid = $db->prepare('SELECT role_id FROM sso_role_map WHERE portal_user_id = ?');
+            if ($uid > 0) {
+                $mid = $db->prepare('SELECT role_id, level FROM sso_role_map WHERE portal_user_id = ?');
                 $mid->execute([$uid]);
-                $mapped = $mid->fetchColumn();
-                if ($mapped) {
-                    $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE id = ?');
-                    $rq->execute([$mapped]);
-                    if ($role = $rq->fetch()) { $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true; }
+                if ($m = $mid->fetch()) {
+                    if (!empty($m['role_id'])) {
+                        $rq = $db->prepare('SELECT id FROM roles WHERE id = ?');
+                        $rq->execute([$m['role_id']]);
+                        if ($r = $rq->fetch()) $roleId = $r['id'];
+                    }
+                    if (in_array($m['level'] ?? '', ['viewer', 'manager', 'admin'], true)) {
+                        $accessLevel = $m['level'];
+                    }
                 }
             }
 
-            // 3) Переходный fallback: прежний project_role_id с портала — чтобы
-            //    деплой не выкинул уже назначенных сотрудников до перехода на карту.
-            if (!$resolved && $portalRoleId !== null && $portalRoleId !== '') {
-                $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE id = ?');
+            // Портальный админ — ВСЕГДА админ Производства (bootstrap): иначе админ
+            // мог бы понизить сам себя через карту и запереться, и стало бы некому
+            // раздавать доступы.
+            if ($level === 'admin') $accessLevel = 'admin';
+
+            // Переходный fallback на прежний project_role_id с портала — чтобы уже
+            // назначенные сотрудники не потеряли свою должность до перехода на карту.
+            if ($roleId === null && $portalRoleId !== null && $portalRoleId !== '') {
+                $rq = $db->prepare('SELECT id FROM roles WHERE id = ?');
                 $rq->execute([$portalRoleId]);
-                if ($role = $rq->fetch()) { $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true; }
+                if ($r = $rq->fetch()) $roleId = $r['id'];
             }
 
-            // 4) Доступ есть, роль не определена → минимальный «Просмотр» (viewer).
-            if (!$resolved) {
-                if ($role = $db->query("SELECT id, is_admin FROM roles WHERE id = 'viewer'")->fetch()) {
-                    $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true;
-                }
+            // Уровень не назначен → «Просмотр» (безопасный дефолт).
+            if ($accessLevel === null) $accessLevel = 'viewer';
+            // Должность не назначена → встроенная роль «Просмотр» (смотровые разделы),
+            // чтобы человек не попадал в пустой интерфейс. Админу должность не нужна:
+            // whoami отдаст ему полный набор вкладок.
+            if ($roleId === null && $accessLevel !== 'admin') {
+                if ($r = $db->query("SELECT id FROM roles WHERE id = 'viewer'")->fetch()) $roleId = $r['id'];
             }
 
-            if ($resolved) {
-                $session = [
-                    'token'      => $token,
-                    'role_id'    => $roleId,
-                    'login'      => $login,
-                    'name'       => $name,
-                    'is_admin'   => $isAdmin,
-                    'expires_at' => $now + 60 * 60 * 24 * 7,
-                ];
-            }
+            $session = [
+                'token'      => $token,
+                'role_id'    => $roleId,
+                'login'      => $login,
+                'name'       => $name,
+                'level'      => $accessLevel,
+                // Админ-панель и управление — только у уровня «Админ», какая бы
+                // должность ни была назначена.
+                'is_admin'   => $accessLevel === 'admin' ? 1 : 0,
+                'expires_at' => $now + 60 * 60 * 24 * 7,
+            ];
         }
     }
 

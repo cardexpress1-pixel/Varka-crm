@@ -10,18 +10,28 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $session = requireAuth();
+// Уровень доступа (2026-07-25): что человек МОЖЕТ делать — отдельно от должности,
+// которая определяет, что он ВИДИТ. Клиент прячет по нему кнопки изменения.
+$level = sessionLevel($session);
 
 if ($session['role_id'] !== null) {
     $q = pdo()->prepare('SELECT id, name, login, is_admin, tabs, fields FROM roles WHERE id = ?');
     $q->execute([$session['role_id']]);
     $role = $q->fetch();
     if ($role) {
+        $tabs = json_decode($role['tabs'] ?? '[]', true) ?: [];
+        // Админ-панель — только у уровня «Админ», какая бы должность ни стояла
+        // (должность отвечает за рабочие разделы, не за управление системой).
+        if ($level !== 'admin') {
+            $tabs = array_values(array_filter($tabs, fn($t) => $t !== 'admin'));
+        }
         echo json_encode(['role' => [
             'id'         => $role['id'],
             'name'       => $role['name'],
             'login'      => $role['login'],
-            'fullAccess' => (bool)$role['is_admin'],
-            'tabs'       => json_decode($role['tabs'] ?? '[]', true) ?: [],
+            'fullAccess' => $level === 'admin',
+            'level'      => $level,
+            'tabs'       => $tabs,
             'fields'     => json_decode($role['fields'] ?? '{}', true) ?: (object)[],
         ]], JSON_UNESCAPED_UNICODE);
         exit;
@@ -37,11 +47,16 @@ if ($session['role_id'] !== null) {
 // пересечению с этим массивом, fullAccess его не заменяет — с одной
 // вкладкой 'admin' меню показывало только раздел «Админ-панель», без
 // дашборда и остальных разделов (баг, найден и исправлен 2026-07-12).
+$allTabs = ['dashboard', 'production', 'weekplan', 'calendar', 'warshchik', 'intake', 'reports', 'journal', 'admin'];
+if ($level !== 'admin') {
+    $allTabs = array_values(array_filter($allTabs, fn($t) => $t !== 'admin'));
+}
 echo json_encode(['role' => [
     'id'         => null,
     'name'       => $session['name'] ?? $session['login'],
     'login'      => $session['login'],
-    'fullAccess' => (bool)$session['is_admin'],
-    'tabs'       => ['dashboard', 'production', 'weekplan', 'calendar', 'warshchik', 'intake', 'reports', 'journal', 'admin'],
+    'fullAccess' => $level === 'admin',
+    'level'      => $level,
+    'tabs'       => $allTabs,
     'fields'     => (object)[],
 ]], JSON_UNESCAPED_UNICODE);
