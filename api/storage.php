@@ -330,8 +330,18 @@ function verifyPortalToken(string $token): ?array {
 
             $roleId = null; $isAdmin = 0; $resolved = false;
 
-            // 1) Явно назначенная внутри Производства роль — приоритет.
-            if ($uid > 0) {
+            // 1) Портальный админ — ВСЕГДА админ Производства (bootstrap). Это
+            //    исключает самоблокировку (админ не «снимет» админа с себя через
+            //    карту) и гарантирует, что всегда есть кому раздавать роли.
+            //    Роль внутри Производства ему не назначается. role_id=null →
+            //    whoami отдаёт синтетического админа с полным набором вкладок.
+            if ($level === 'admin') {
+                $isAdmin = 1; $resolved = true;
+            }
+
+            // 2) Остальные (доступ «по галочке») — роль из карты Производства
+            //    (Настройки → Доступы) имеет приоритет.
+            if (!$resolved && $uid > 0) {
                 $mid = $db->prepare('SELECT role_id FROM sso_role_map WHERE portal_user_id = ?');
                 $mid->execute([$uid]);
                 $mapped = $mid->fetchColumn();
@@ -342,21 +352,15 @@ function verifyPortalToken(string $token): ?array {
                 }
             }
 
-            // 2) Переходный fallback (пока роль не назначили внутри) — сохраняет
-            //    прежнее поведение, чтобы деплой никого не выкинул: портальный admin →
-            //    админ (bootstrap, чтобы было кому раздать роли), иначе прежний
-            //    project_role_id с портала.
-            if (!$resolved) {
-                if ($level === 'admin') {
-                    $isAdmin = 1; $resolved = true; // role_id=null → whoami даёт синт. админа
-                } elseif ($portalRoleId !== null && $portalRoleId !== '') {
-                    $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE id = ?');
-                    $rq->execute([$portalRoleId]);
-                    if ($role = $rq->fetch()) { $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true; }
-                }
+            // 3) Переходный fallback: прежний project_role_id с портала — чтобы
+            //    деплой не выкинул уже назначенных сотрудников до перехода на карту.
+            if (!$resolved && $portalRoleId !== null && $portalRoleId !== '') {
+                $rq = $db->prepare('SELECT id, is_admin FROM roles WHERE id = ?');
+                $rq->execute([$portalRoleId]);
+                if ($role = $rq->fetch()) { $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true; }
             }
 
-            // 3) Доступ есть, роль не определена → минимальный «Просмотр» (viewer).
+            // 4) Доступ есть, роль не определена → минимальный «Просмотр» (viewer).
             if (!$resolved) {
                 if ($role = $db->query("SELECT id, is_admin FROM roles WHERE id = 'viewer'")->fetch()) {
                     $roleId = $role['id']; $isAdmin = (int) $role['is_admin']; $resolved = true;
