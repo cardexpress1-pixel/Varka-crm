@@ -333,11 +333,19 @@ function verifyPortalToken(string $token): ?array {
     if (is_array($data) && !empty($data['permissions'])) {
         $level = 'none';
         $portalRoleId = null;
+        // Админ ПЛАТФОРМЫ — тот, у кого права администратора на самом портале
+        // (проект `identity`). Раньше определяли по уровню admin на manufacture, но
+        // портал переходит на модель «галочка доступа» и уровней на проект больше
+        // не присылает — тогда владелец потерял бы админку здесь. Старое условие
+        // оставлено как переходное (пока портал ещё шлёт уровни).
+        $identityAdmin = false;
         foreach ($data['permissions'] as $p) {
-            if (($p['project_code'] ?? '') === 'manufacture') {
+            $code = $p['project_code'] ?? '';
+            if ($code === 'manufacture') {
                 $level = $p['level'];
                 $portalRoleId = $p['project_role_id'] ?? null;
-                break;
+            } elseif ($code === 'identity' && ($p['level'] ?? '') === 'admin') {
+                $identityAdmin = true;
             }
         }
         // «Галочная» модель (2026-07-25): портал даёт только ДОСТУП (любой уровень !=
@@ -402,10 +410,11 @@ function verifyPortalToken(string $token): ?array {
                 if ($r = $rq->fetch()) $roleId = $r['id'];
             }
 
-            // Портальный админ — ВСЕГДА админ Производства (bootstrap): иначе админ
-            // мог бы понизить сам себя через карту и запереться, и стало бы некому
-            // раздавать доступы.
-            if ($level === 'admin') $accessLevel = 'admin';
+            // Админ платформы — ВСЕГДА админ Производства (bootstrap): иначе он мог
+            // бы понизить сам себя через карту и запереться, и стало бы некому
+            // раздавать доступы. ($level === 'admin' — переходное условие на время,
+            // пока портал ещё присылает уровни на проект.)
+            if ($identityAdmin || $level === 'admin') $accessLevel = 'admin';
 
             // Переходный fallback на прежний project_role_id с портала — чтобы уже
             // назначенные сотрудники не потеряли свою должность до перехода на карту.
