@@ -2041,7 +2041,7 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
         <h3>Доступы сотрудников</h3>
         <button class="btn btn-ghost btn-sm" onclick="renderSsoUsersList()">↻ Обновить</button>
       </div>
-      <p>Доступ к Производству выдаётся на портале (varka.kz → «Пользователи и права»). Здесь вы настраиваете две вещи: <b>Должность</b> — какие разделы человек видит, и <b>Уровень</b> — что он может делать: <b>Просмотр</b> (только смотреть), <b>Редактирование</b> (вносить и править), <b>Админ</b> (всё, включая админ-панель). По умолчанию — «Просмотр».</p>
+      <p>Доступ к Производству и должность сотрудника задаются на портале (varka.kz → «Пользователи и права»). Здесь вы назначаете только <b>уровень</b>: <b>Просмотр</b> — только смотреть, <b>Редактирование</b> — вносить и править, <b>Админ</b> — всё, включая админ-панель. По умолчанию «Просмотр». Разделы человек видит по своей должности — что в неё входит, настраивается в разделе «Роли».</p>
       <div id="sso-users-list" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;"></div>
     </div>
   </div>
@@ -7360,7 +7360,7 @@ async function renderSsoUsersList() {
         const pd = await pr.json();
         roster = (pd.permissions || [])
           .filter(p => p.project_code === 'manufacture' && p.level !== 'none')
-          .map(p => ({ portal_user_id: p.user_id, name: p.full_name, email: p.email }));
+          .map(p => ({ portal_user_id: p.user_id, name: p.full_name, email: p.email, job_title: p.job_title }));
       }
     }
   } catch (e) { /* портал недоступен — фолбэк на локальный список ниже */ }
@@ -7374,49 +7374,54 @@ async function renderSsoUsersList() {
     box.innerHTML = '<div style="padding:12px;color:var(--text2);">Пока никому не выдан доступ к Производству. Выдайте на портале: varka.kz → «Пользователи и права».</div>';
     return;
   }
-  // ДВЕ независимые вещи: ДОЛЖНОСТЬ (что видит) и УРОВЕНЬ (что может делать).
-  // Из списка должностей убраны «Админ» и «Просмотр» — теперь это уровни, а не
-  // должности (иначе в одном списке смешивались бы разные сущности).
-  const roles = (state.roles || []).filter(r => r.id !== 'viewer' && !r.fullAccess);
+  // Здесь назначается ТОЛЬКО уровень доступа. Должность берётся из карточки
+  // сотрудника на портале (там она и заводится) и сопоставляется с ролью
+  // Производства по названию — второй раз её не спрашиваем. Что видит каждая
+  // должность — настраивается в разделе «Роли», как и раньше.
   const LEVELS = [['viewer','Просмотр'],['manager','Редактирование'],['admin','Админ']];
+  const norm = s => String(s || '').trim().toLowerCase();
+  const roleNames = new Set((state.roles || []).map(r => norm(r.name)));
   box.innerHTML = list.map(u => {
-    const roleOpts = ['<option value="">— не назначена —</option>']
-      .concat(roles.map(r => `<option value="${escapeHtml(r.id)}" ${u.role_id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}</option>`))
-      .join('');
     const lvl = u.level || 'viewer';
     const lvlOpts = LEVELS.map(([v,label]) => `<option value="${v}" ${lvl === v ? 'selected' : ''}>${label}</option>`).join('');
     const who = escapeHtml(u.name || u.email || ('ID ' + u.portal_user_id));
     const sub = (u.email && u.name) ? escapeHtml(u.email) : '';
+    // Должность с портала: показываем как есть и предупреждаем, если роли с таким
+    // названием в Производстве нет (тогда человек не получит рабочих разделов).
+    const job = (u.job_title || '').trim();
+    const jobOk = job !== '' && roleNames.has(norm(job));
+    const jobHtml = job === ''
+      ? `<span style="color:var(--text2);">должность не указана в портале</span>`
+      : (jobOk
+          ? `<span style="color:var(--text2);">должность: <b>${escapeHtml(job)}</b></span>`
+          : `<span style="color:#b45309;">должность «${escapeHtml(job)}» — роли с таким названием нет в разделе «Роли»</span>`);
     const sel = 'padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text);';
     return `
       <div data-uid="${u.portal_user_id}" data-name="${escapeHtml(u.name || '')}" data-email="${escapeHtml(u.email || '')}"
            style="display:flex; align-items:center; gap:10px; background:var(--surface3); border-radius:8px; padding:8px 12px; flex-wrap:wrap;">
-        <div style="flex:1; min-width:140px;">
+        <div style="flex:1; min-width:180px;">
           <div style="font-size:14px; font-weight:600;">${who}</div>
           ${sub ? `<div style="font-size:12px; color:var(--text2);">${sub}</div>` : ''}
+          <div style="font-size:12px; margin-top:2px;">${jobHtml}</div>
         </div>
-        <label style="font-size:12px; color:var(--text2);">Должность
-          <select class="ssu-role" onchange="saveSsoUserRole(this)" style="${sel} min-width:180px; display:block; margin-top:2px;">${roleOpts}</select>
-        </label>
         <label style="font-size:12px; color:var(--text2);">Уровень
-          <select class="ssu-level" onchange="saveSsoUserRole(this)" style="${sel} min-width:150px; display:block; margin-top:2px;">${lvlOpts}</select>
+          <select class="ssu-level" onchange="saveSsoUserRole(this)" style="${sel} min-width:160px; display:block; margin-top:2px;">${lvlOpts}</select>
         </label>
       </div>`;
   }).join('');
 }
 
-// Сохраняем обе настройки строки сразу — должность и уровень независимы, но
-// хранятся одной записью (any select в строке шлёт актуальное состояние обоих).
+// Сохраняем уровень доступа. Должность здесь не передаётся — она приходит из
+// портала (job_title) и сопоставляется с ролью по названию на сервере.
 async function saveSsoUserRole(sel) {
   const row = sel.closest('[data-uid]');
   if (!row) return;
   const uid = parseInt(row.dataset.uid, 10);
-  const roleId = row.querySelector('.ssu-role')?.value || null;
-  const level  = row.querySelector('.ssu-level')?.value || 'viewer';
+  const level = row.querySelector('.ssu-level')?.value || 'viewer';
   try {
     const res = await apiFetch('/sso-users', {
       method: 'POST',
-      body: JSON.stringify({ portal_user_id: uid, name: row.dataset.name || null, email: row.dataset.email || null, role_id: roleId, level }),
+      body: JSON.stringify({ portal_user_id: uid, name: row.dataset.name || null, email: row.dataset.email || null, level }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { showToast(data.error || 'Ошибка сохранения'); return; }

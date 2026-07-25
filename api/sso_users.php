@@ -60,8 +60,13 @@ if ($method === 'POST') {
     // Upsert: строки может ещё не быть (сотрудник не заходил после выдачи доступа) —
     // заводим её, чтобы доступ можно было настроить заранее. name/email обновляем,
     // только если пришли (COALESCE не затирает уже сохранённые значения на null).
+    // role_id (должность) интерфейсом больше не передаётся — она приходит из портала
+    // (job_title) и сопоставляется по названию в verifyPortalToken(). Сохранённое
+    // значение НЕ затираем: оно работает как фолбэк для тех, у кого название
+    // должности в портале ещё не совпадает с названием роли.
     $db->prepare('INSERT INTO sso_role_map (portal_user_id, email, name, role_id, level) VALUES (?, ?, ?, ?, ?)
-                  ON DUPLICATE KEY UPDATE role_id = VALUES(role_id), level = VALUES(level),
+                  ON DUPLICATE KEY UPDATE level = VALUES(level),
+                    role_id = COALESCE(VALUES(role_id), role_id),
                     email = COALESCE(VALUES(email), email),
                     name  = COALESCE(VALUES(name),  name)')
        ->execute([$uid, $email, $name, $roleId, $level]);

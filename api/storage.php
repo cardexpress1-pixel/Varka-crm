@@ -360,26 +360,46 @@ function verifyPortalToken(string $token): ?array {
             }
 
             // ДВЕ НЕЗАВИСИМЫЕ ВЕЩИ (2026-07-25, единое понятие доступов):
-            //   role_id     — ДОЛЖНОСТЬ: какие разделы (вкладки) человек видит;
+            //   role_id     — ДОЛЖНОСТЬ: какие разделы (вкладки) человек видит.
+            //                 Источник — ПОРТАЛ (карточка сотрудника, job_title),
+            //                 сопоставляется с ролью Производства по названию.
+            //                 В интерфейсе проекта повторно не спрашивается.
             //   accessLevel — УРОВЕНЬ: что он может делать (viewer/manager/admin),
-            //                 одинаково во всех проектах платформы.
-            // Обе назначает админ внутри Производства (Настройки → Доступы).
+            //                 одинаково во всех проектах; назначается в Настройки →
+            //                 Доступы.
             $roleId = null;
             $accessLevel = null;
 
+            // УРОВЕНЬ — из карты доступов Производства (Настройки → Доступы).
+            $legacyRoleId = null;
             if ($uid > 0) {
                 $mid = $db->prepare('SELECT role_id, level FROM sso_role_map WHERE portal_user_id = ?');
                 $mid->execute([$uid]);
                 if ($m = $mid->fetch()) {
-                    if (!empty($m['role_id'])) {
-                        $rq = $db->prepare('SELECT id FROM roles WHERE id = ?');
-                        $rq->execute([$m['role_id']]);
-                        if ($r = $rq->fetch()) $roleId = $r['id'];
-                    }
+                    $legacyRoleId = $m['role_id'] ?: null;
                     if (in_array($m['level'] ?? '', ['viewer', 'manager', 'admin'], true)) {
                         $accessLevel = $m['level'];
                     }
                 }
+            }
+
+            // ДОЛЖНОСТЬ — из портала (решение владельца 2026-07-25): должность
+            // заводится в карточке сотрудника на varka.kz и НЕ дублируется в
+            // интерфейсе проекта. Сопоставляем с ролью Производства по названию
+            // (без учёта регистра/пробелов). Не нашли — ниже сработают фолбэки.
+            $jobTitle = trim((string) ($data['job_title'] ?? ''));
+            if ($jobTitle !== '') {
+                $rq = $db->prepare('SELECT id FROM roles WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1');
+                $rq->execute([$jobTitle]);
+                if ($r = $rq->fetch()) $roleId = $r['id'];
+            }
+
+            // Фолбэк на ранее назначенную вручную должность (пока названия не
+            // выровнены с порталом) — чтобы никто не потерял свои разделы.
+            if ($roleId === null && $legacyRoleId !== null) {
+                $rq = $db->prepare('SELECT id FROM roles WHERE id = ?');
+                $rq->execute([$legacyRoleId]);
+                if ($r = $rq->fetch()) $roleId = $r['id'];
             }
 
             // Портальный админ — ВСЕГДА админ Производства (bootstrap): иначе админ
