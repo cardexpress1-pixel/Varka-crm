@@ -20,6 +20,12 @@
 <title>Производство — ВарКа</title>
 <style>
   :root {
+    /* Высота шапки. От неё зависят сайдбар (top + height), .app-main и бегущая
+       строка #alarm-ticker — раньше 64px были продублированы в каждом из этих
+       мест, и поднять шапку означало не забыть все пять. Теперь значение одно.
+       В медиа-запросах переопределяется именно на :root, а не на .nav: сайдбару
+       и .app-main шапка не родитель, через неё переменная до них не дойдёт. */
+    --nav-h: 72px;
     --bg: #0f1117;
     --surface: #1a1d27;
     --surface2: #22263a;
@@ -127,14 +133,14 @@
   .login-error { color: var(--danger); font-size: 13px; text-align: center; margin-top: 10px; min-height: 16px; }
 
   /* ═══ NAV ═══ */
-  .nav { display: flex; align-items: center; gap: 0; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; height: 64px; position: sticky; top: 0; z-index: 100; overflow: visible; }
+  .nav { display: flex; align-items: center; gap: 0; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; height: var(--nav-h); position: sticky; top: 0; z-index: 100; overflow: visible; }
   .nav-logo { font-weight: 800; font-size: 18px; color: var(--accent); letter-spacing: -0.5px; flex-shrink: 0; }
   .nav-logo span { color: var(--text2); font-weight: 400; }
   /* Логотип брендинга. Высота — под шапку, ширина по пропорции: если задать боксу
      фиксированную ширину, object-fit:contain отцентрирует картинку внутри него и
      логотип визуально уедет от левого края. object-position:left — страховка на
      случай, если max-width всё же ограничит ширину. */
-  .nav-logo img { display: block; height: 44px; width: auto; max-width: 240px;
+  .nav-logo img { display: block; height: 56px; width: auto; max-width: 300px;
                   object-fit: contain; object-position: left center; }
   .nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding-left: 12px; }
   .badge-count { background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 6px; }
@@ -146,8 +152,8 @@
   .sidebar-toggle-btn { display: none; }
   .sidebar-edge-btn { position: sticky; top: calc(30vh - 24px); align-self: flex-start; flex-shrink: 0; margin-left: -1px; width: 16px; height: 48px; background: var(--surface); border: 1px solid var(--border); border-left: none; border-radius: 0 8px 8px 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text2); transition: background .15s, color .15s; z-index: 101; box-shadow: 2px 0 4px rgba(0,0,0,.1); padding: 0; }
   .sidebar-edge-btn:hover { background: var(--surface2); color: var(--text); }
-  .app-layout { display: flex; min-height: calc(100vh - 64px); }
-  .sidebar { width: 260px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); position: sticky; top: 64px; height: calc(100vh - 64px); overflow-y: auto; overflow-x: hidden; transition: width .2s ease, padding .2s ease, top .2s ease, height .2s ease; scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .app-layout { display: flex; min-height: calc(100vh - var(--nav-h)); }
+  .sidebar { width: 260px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); overflow-y: auto; overflow-x: hidden; transition: width .2s ease, padding .2s ease, top .2s ease, height .2s ease; scrollbar-width: thin; scrollbar-color: transparent transparent; }
   .sidebar:hover { scrollbar-color: var(--border) transparent; }
   .sidebar::-webkit-scrollbar { width: 5px; }
   .sidebar::-webkit-scrollbar-track { background: transparent; }
@@ -170,7 +176,7 @@
   .admin-menu-icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: rgba(59,130,246,.1); color: var(--accent); flex-shrink: 0; }
   .admin-menu-icon svg { width: 16px; height: 16px; }
   .nav-tab-label { flex: 1; min-width: 0; transition: opacity .15s; }
-  .app-main { flex: 1; min-width: 0; overflow-y: auto; height: calc(100vh - 64px); }
+  .app-main { flex: 1; min-width: 0; overflow-y: auto; height: calc(100vh - var(--nav-h)); }
   /* свёрнутое состояние — узкая полоса только с иконками, не полное скрытие */
   .app-layout.sidebar-collapsed .sidebar { width: 60px; }
   .app-layout.sidebar-collapsed .sidebar-tabs { padding: 12px 6px; }
@@ -481,7 +487,11 @@
   html:has(body.role-terminal) { overscroll-behavior: none; }
   body.role-terminal { height: 100dvh; min-height: -webkit-fill-available; overflow: hidden; overscroll-behavior: none; }
   body.role-terminal #app-shell { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-  body.role-terminal .nav { height: 52px; min-height: 52px; flex-shrink: 0; padding: 0 14px; overflow: hidden; }
+  /* Терминал — компактная шапка. Высота задаётся переменной, а не только на
+     .nav: от неё же считает свой sticky-отступ бегущая строка, иначе она
+     залипает ниже шапки и оставляет щель. */
+  body.role-terminal { --nav-h: 52px; }
+  body.role-terminal .nav { height: var(--nav-h); min-height: var(--nav-h); flex-shrink: 0; padding: 0 14px; overflow: hidden; }
   body.role-terminal .app-layout { flex: 1; min-height: 0; overflow: hidden; display: block; }
   body.role-terminal .sidebar { display: none !important; }
   body.role-terminal .app-main { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: none; }
@@ -1019,9 +1029,10 @@
     .page { padding: 16px 14px; }
     .grid-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
     .grid-3 { grid-template-columns: 1fr 1fr; }
-    .nav { padding: 0 14px; height: 48px; }
+    :root { --nav-h: 56px; }
+    .nav { padding: 0 14px; }
     .nav-logo { font-size: 15px; }
-    .nav-logo img { height: 32px; max-width: 180px; }
+    .nav-logo img { height: 42px; max-width: 200px; }
   }
 
   /* Tablets portrait 600–768px */
@@ -1089,9 +1100,10 @@
     .detail-product { font-size: 16px; }
     .ingredient-row { gap: 7px; }
     .ing-fact { width: 64px; font-size: 13px; }
+    :root { --nav-h: 54px; }
     .nav-logo { font-size: 14px; }
-    .nav { padding: 0 10px; height: 46px; }
-    .nav-logo img { height: 30px; max-width: 150px; }
+    .nav { padding: 0 10px; }
+    .nav-logo img { height: 40px; max-width: 175px; }
     .login-box { padding: 24px 18px; }
     .role-select { gap: 6px; }
     .role-btn { padding: 10px 5px; }
@@ -1139,9 +1151,10 @@
     html { font-size: 11px; }
     .grid-stats { grid-template-columns: 1fr 1fr; gap: 5px; }
     .stat-num { font-size: 16px; }
-    .nav { height: 44px; padding: 0 8px; }
+    :root { --nav-h: 52px; }
+    .nav { padding: 0 8px; }
     .nav-logo { font-size: 13px; }
-    .nav-logo img { height: 28px; max-width: 120px; }
+    .nav-logo img { height: 38px; max-width: 145px; }
     .cal-day { min-height: 36px; }
     .reactor-badge { width: 30px; height: 30px; font-size: 11px; }
     .batch-name { font-size: 12px; }
@@ -1165,7 +1178,11 @@
 
   /* Landscape phone */
   @media (max-width: 768px) and (orientation: landscape) {
-    .nav { height: 44px; }
+    /* Логотип тут задаётся явно: в диапазоне 641–768px ширины ни один из
+       предыдущих брейкпоинтов не сработает, и в низкую альбомную шапку
+       подставится десктопный размер — он из неё вылезет. */
+    :root { --nav-h: 52px; }
+    .nav-logo img { height: 38px; max-width: 200px; }
     .page { padding: 10px 14px; }
     .grid-stats { grid-template-columns: repeat(4, 1fr); gap: 7px; }
     .stat-box { padding: 8px; }
@@ -1408,7 +1425,7 @@
 </nav>
 
 <!-- ═══ ALARM TICKER ═══ -->
-<div id="alarm-ticker" style="display:none; height:28px; background:#0f172a; border-bottom:1px solid var(--border); overflow:hidden; position:sticky; top:64px; z-index:99;">
+<div id="alarm-ticker" style="display:none; height:28px; background:#0f172a; border-bottom:1px solid var(--border); overflow:hidden; position:sticky; top:var(--nav-h); z-index:99;">
   <div id="alarm-ticker-inner" style="display:flex; align-items:center; height:100%; white-space:nowrap; will-change:transform;">
     <span id="alarm-ticker-content" style="display:inline-flex; align-items:center; gap:0;"></span>
   </div>
