@@ -44,19 +44,17 @@ if ($method === 'POST') {
         }
     }
 
-    // Обновляем существующую запись (она заводится при первом входе сотрудника).
-    $upd = $db->prepare('UPDATE sso_role_map SET role_id = ? WHERE portal_user_id = ?');
-    $upd->execute([$roleId, $uid]);
-    if ($upd->rowCount() === 0) {
-        // Строки нет — сотрудник ещё ни разу не заходил после выдачи доступа.
-        $chk = $db->prepare('SELECT portal_user_id FROM sso_role_map WHERE portal_user_id = ?');
-        $chk->execute([$uid]);
-        if (!$chk->fetch()) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Сотрудник ещё не заходил в Производство — попросите его войти один раз']);
-            exit;
-        }
-    }
+    $name  = (isset($b['name'])  && $b['name']  !== '' && $b['name']  !== null) ? substr((string) $b['name'], 0, 190)  : null;
+    $email = (isset($b['email']) && $b['email'] !== '' && $b['email'] !== null) ? substr((string) $b['email'], 0, 190) : null;
+
+    // Upsert: строки может ещё не быть (сотрудник не заходил после выдачи доступа) —
+    // заводим её, чтобы роль можно было назначить заранее. name/email обновляем,
+    // только если пришли (COALESCE не затирает уже сохранённые значения на null).
+    $db->prepare('INSERT INTO sso_role_map (portal_user_id, email, name, role_id) VALUES (?, ?, ?, ?)
+                  ON DUPLICATE KEY UPDATE role_id = VALUES(role_id),
+                    email = COALESCE(VALUES(email), email),
+                    name  = COALESCE(VALUES(name),  name)')
+       ->execute([$uid, $email, $name, $roleId]);
 
     // Сброс кэша verify: назначенная роль применяется сразу, а не через ≤60 сек.
     // Кэш ключуется по токену (не по человеку), поэтому чистим целиком — операция

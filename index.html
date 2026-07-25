@@ -7247,28 +7247,49 @@ function openAdminSection(name) {
 }
 
 // ── Доступы: сотрудники портала → роль-должность (2026-07-25, «галочная» модель) ──
-// Портал даёт только факт доступа; конкретную роль назначаем здесь. Список из
-// GET /sso-users (строка появляется после первого SSO-входа сотрудника). Роли —
-// из state.roles (уже загружены; «Просмотр» — дефолт, поэтому в списке его прячем).
+// Список — ВСЕ, у кого есть доступ к Производству на портале (varka.kz/api/permissions
+// под токеном портала, тот же домен), не дожидаясь их первого входа; слитый с локально
+// назначенными ролями (/sso-users). Если портал недоступен (или админ не портальный) —
+// фолбэк на тех, кто уже заходил. Роли — из state.roles («Просмотр» — дефолт, прячем).
 async function renderSsoUsersList() {
   const box = document.getElementById('sso-users-list');
   if (!box) return;
   box.innerHTML = '<div style="padding:12px;color:var(--text2);">Загрузка…</div>';
-  let users = [];
+
+  // Локально назначенные роли (по кому уже есть строка в sso_role_map).
+  const assigned = {};
   try {
     const res = await apiFetch('/sso-users');
     const data = await res.json();
-    users = (data && data.users) || [];
-  } catch (e) {
-    box.innerHTML = '<div style="padding:12px;color:var(--danger);">Не удалось загрузить список</div>';
-    return;
-  }
-  if (!users.length) {
-    box.innerHTML = '<div style="padding:12px;color:var(--text2);">Пока никто не заходил. Выдайте доступ на портале и попросите сотрудника войти один раз — он появится здесь.</div>';
+    (data.users || []).forEach(u => { assigned[u.portal_user_id] = u; });
+  } catch (e) { /* эндпоинт недоступен — покажем что сможем */ }
+
+  // Ростер: все с доступом к Производству на портале (не дожидаясь входа).
+  let roster = null;
+  try {
+    const pt = localStorage.getItem('portal_token');
+    if (pt) {
+      const pr = await fetch('https://varka.kz/api/permissions', { headers: { 'Authorization': 'Bearer ' + pt } });
+      if (pr.ok) {
+        const pd = await pr.json();
+        roster = (pd.permissions || [])
+          .filter(p => p.project_code === 'manufacture' && p.level !== 'none')
+          .map(p => ({ portal_user_id: p.user_id, name: p.full_name, email: p.email }));
+      }
+    }
+  } catch (e) { /* портал недоступен — фолбэк на локальный список ниже */ }
+
+  const list = roster
+    ? roster.map(r => ({ portal_user_id: r.portal_user_id, name: r.name, email: r.email,
+        role_id: assigned[r.portal_user_id] ? assigned[r.portal_user_id].role_id : null }))
+    : Object.values(assigned);
+
+  if (!list.length) {
+    box.innerHTML = '<div style="padding:12px;color:var(--text2);">Пока никому не выдан доступ к Производству. Выдайте на портале: varka.kz → «Пользователи и права».</div>';
     return;
   }
   const roles = (state.roles || []).filter(r => r.id !== 'viewer');
-  box.innerHTML = users.map(u => {
+  box.innerHTML = list.map(u => {
     const opts = ['<option value="">— Просмотр (по умолчанию) —</option>']
       .concat(roles.map(r => `<option value="${escapeHtml(r.id)}" ${u.role_id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}</option>`))
       .join('');
@@ -7280,16 +7301,18 @@ async function renderSsoUsersList() {
           <div style="font-size:14px; font-weight:600;">${who}</div>
           ${sub ? `<div style="font-size:12px; color:var(--text2);">${sub}</div>` : ''}
         </div>
-        <select onchange="saveSsoUserRole(${u.portal_user_id}, this.value)" style="min-width:190px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text);">${opts}</select>
+        <select data-uid="${u.portal_user_id}" data-name="${escapeHtml(u.name || '')}" data-email="${escapeHtml(u.email || '')}" onchange="saveSsoUserRole(this)" style="min-width:190px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text);">${opts}</select>
       </div>`;
   }).join('');
 }
 
-async function saveSsoUserRole(portalUserId, roleId) {
+async function saveSsoUserRole(sel) {
+  const uid = parseInt(sel.dataset.uid, 10);
+  const roleId = sel.value || null;
   try {
     const res = await apiFetch('/sso-users', {
       method: 'POST',
-      body: JSON.stringify({ portal_user_id: portalUserId, role_id: roleId || null }),
+      body: JSON.stringify({ portal_user_id: uid, name: sel.dataset.name || null, email: sel.dataset.email || null, role_id: roleId }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { showToast(data.error || 'Ошибка сохранения'); return; }
