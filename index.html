@@ -7492,12 +7492,51 @@ function applyBranding() {
     // Размеры — в CSS (.nav-logo img), чтобы работали media-запросы: на мобильных
     // шапка ниже 64px, а inline-стиль оттуда не перебить.
     el.innerHTML = `<img src="${logoSrc}" alt="" />`;
+    showTrimmedLogo(el.querySelector('img'), logoSrc);
   } else if (state.companyName) {
     el.textContent = state.companyName;
     el.style.color = '';
   } else {
     el.innerHTML = 'Вар<span style="color:var(--text2); font-weight:400;">Ка</span>';
   }
+}
+
+// Логотип на сервере мог быть залит ДО появления обрезки при загрузке. Так и вышло
+// с текущим: файл 1536x1024, а сам знак — 1181x421 в середине, вокруг прозрачные
+// поля (274px сверху, 329px снизу). object-fit:contain вписывает в бокс весь кадр
+// вместе с полями, поэтому в шапке высотой 56px знак занимал только 23px.
+// Обрезаем при отрисовке, а не только при заливке — тогда уже загруженные логотипы
+// чинятся сами, без перезаливки через админку.
+// Строго визуально: ни state, ни файл на сервере не трогаем — записи в БД тут нет.
+let _trimmedLogo = { src: null, url: null };
+
+function showTrimmedLogo(img, src) {
+  if (!img) return;
+  if (_trimmedLogo.src === src) {           // уже считали для этого файла
+    if (_trimmedLogo.url) img.src = _trimmedLogo.url;
+    return;
+  }
+  const probe = new Image();
+  probe.onload = () => {
+    let url = null;
+    try {
+      const c = document.createElement('canvas');
+      c.width = probe.naturalWidth;
+      c.height = probe.naturalHeight;
+      c.getContext('2d').drawImage(probe, 0, 0);
+      const cropped = cropTransparentEdges(c);
+      // Если полей не было — не гоняем картинку через dataURL впустую.
+      if (cropped.width !== c.width || cropped.height !== c.height) {
+        url = cropped.toDataURL('image/png');
+      }
+    } catch (e) {
+      // Канвас может оказаться «испорчен» (логотип с чужого origin) — читать пиксели
+      // тогда нельзя. Не беда: остаётся исходная картинка, просто без обрезки.
+    }
+    _trimmedLogo = { src, url };
+    if (url) img.src = url;
+  };
+  probe.src = src;
 }
 
 function closeAdminSection() {
