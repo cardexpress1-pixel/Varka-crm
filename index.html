@@ -1397,6 +1397,12 @@
 
     <button class="btn btn-primary btn-full" onclick="doLogin()">Войти</button>
     <div class="login-error" id="login-error"></div>
+    <!-- Этот экран видит только цеховой терминал (?shop=1). Выход отсюда для
+         тех, кто открыл ссылку по ошибке: снять метку и уйти на единый вход. -->
+    <div style="text-align:center; margin-top:16px;">
+      <a href="#" onclick="event.preventDefault(); goToPortal();"
+         style="font-size:13px; color:var(--text2); text-decoration:none; border-bottom:1px dashed var(--text3);">Сотрудникам офиса — вход через портал varka.kz</a>
+    </div>
   </div>
 </div>
 
@@ -3425,6 +3431,54 @@ function addDays(date, n) {
 // ════════════════════════════════════════════════════════════════════════════
 // LOGIN
 // ════════════════════════════════════════════════════════════════════════════
+// ── Цеховой терминал: вход по логину роли вместо портала (2026-07-29) ──────────
+// Планшеты участков варки и розлива работают под ролями Производства
+// (warshchik/intake) — личных аккаунтов на портале varka.kz у операторов нет,
+// поэтому «единый вход через портал» (2026-07-21) отрезал цех от системы.
+// Спец-ссылка .../manufacture/?shop=1 возвращает им прежнюю форму входа
+// (api/auth.php её всё это время принимал — убран был только экран).
+// Метка сохраняется в localStorage, чтобы после выхода и протухшей сессии
+// терминал возвращался к этой же форме, а не улетал на портал — иначе ссылку
+// пришлось бы открывать заново каждую смену. Для всех остальных точка входа
+// прежняя и единственная — varka.kz.
+const PORTAL_URL = 'https://varka.kz/';
+const SHOP_FLAG  = 'varka_shop_terminal';
+
+function isShopTerminal() {
+  let fromUrl = false;
+  try { fromUrl = new URLSearchParams(location.search).get('shop') === '1'; } catch(e) {}
+  try {
+    if (fromUrl) localStorage.setItem(SHOP_FLAG, '1');
+    return fromUrl || localStorage.getItem(SHOP_FLAG) === '1';
+  } catch(e) { return fromUrl; } // localStorage недоступен — работаем хотя бы по ссылке
+}
+
+// Экран входа терминала. msg — необязательное сообщение (напр. про истёкшую сессию).
+function showShopLogin(msg) {
+  const login = document.getElementById('login-screen');
+  if (!login) { window.location.replace(PORTAL_URL); return; } // подстраховка
+  const shell = document.getElementById('app-shell');
+  if (shell) shell.style.display = 'none';
+  const pwd = document.getElementById('login-password');
+  if (pwd) pwd.value = '';
+  const err = document.getElementById('login-error');
+  if (err) { err.style.color = 'var(--danger)'; err.textContent = msg || ''; }
+  login.style.display = 'flex';
+}
+
+// Снимаем метку терминала: если ?shop=1 открыли на обычном компьютере, эта
+// кнопка должна вернуть его к нормальному поведению (единый вход через портал).
+function goToPortal() {
+  try { localStorage.removeItem(SHOP_FLAG); } catch(e) {}
+  window.location.replace(PORTAL_URL);
+}
+
+// Сессии нет: цеховому терминалу — своя форма входа, всем остальным — портал.
+function leaveToEntryPoint(msg) {
+  if (isShopTerminal()) showShopLogin(msg);
+  else window.location.replace(PORTAL_URL);
+}
+
 // Вход теперь проверяет ТОЛЬКО сервер (POST api/auth, bcrypt): паролей в state
 // больше нет. Неудачные попытки фиксирует сервер (login_log + rate limit 10/15мин).
 async function doLogin() {
@@ -3502,7 +3556,9 @@ async function doLogout() {
   _loggingOut = false;
   // Единый вход платформы (решение владельца 2026-07-21): своей формы входа
   // у Manufacture больше нет — после выхода уводим на портал varka.kz.
-  window.location.replace('https://varka.kz/');
+  // Исключение — цеховой терминал (?shop=1): он входит по логину роли, ему
+  // показываем прежнюю форму, иначе смена не смогла бы войти снова.
+  leaveToEntryPoint();
 }
 
 function toggleSidebar() {
@@ -4096,7 +4152,10 @@ function handleAuthExpired() {
   // Единый вход платформы (решение владельца 2026-07-21): своей формы входа у
   // Manufacture больше нет — протухшая/отозванная сессия уводит на портал;
   // при живом portal_token портал тихо переSSOшит обратно при следующем клике.
-  window.location.replace('https://varka.kz/');
+  // Цеховой терминал (?shop=1) вместо этого получает свою форму входа.
+  // При штатном выходе (_loggingOut) 401 на фоновом /activity — не ошибка,
+  // сообщение не показываем.
+  leaveToEntryPoint(_loggingOut ? '' : 'Сессия истекла — войдите заново');
 }
 
 // ── pmStage: ЛОКАЛЬНЫЙ UI-выбор карточки-стадии в «Управлении производством» ──
@@ -8920,7 +8979,8 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
   } else {
     // Единый вход платформы (решение владельца 2026-07-21): без сессии и без
     // успешного SSO своей формы входа нет — сразу на портал varka.kz.
-    window.location.replace('https://varka.kz/');
+    // Цеховой терминал (?shop=1) — исключение: он входит логином роли.
+    leaveToEntryPoint();
   }
 })();
 
