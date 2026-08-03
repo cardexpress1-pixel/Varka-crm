@@ -5584,10 +5584,10 @@ function renderWeekPlan() {
       const val = wpDemandFor(sku, c);
       needTotal += val;
       rowCells += `<td style="padding:2px; border:1px solid var(--border);">
-        <input type="number" data-wp="demand" value="${val || ''}" placeholder="0" min="0"
+        <input type="number" data-wp="demand" data-client="${escapeHtml(c)}" value="${val || ''}" placeholder="0" min="0"
           style="width:100%; padding:4px; font-size:12px; text-align:center; background:var(--surface2); border:1px solid var(--border); border-radius:4px;"
-          oninput="wpRecalcRow('${sku}')"
-          onchange="wpSetDemand('${sku}','${c}', parseFloat(this.value)||0)" />
+          oninput="wpRecalcRow(this)"
+          onchange="wpDemandChanged(this)" />
       </td>`;
     });
 
@@ -5604,10 +5604,10 @@ function renderWeekPlan() {
       // после обнуления плана пустая ячейка не должна выглядеть как "сделанная"
       const generated = wpIsGenerated(sku, d) && val > 0;
       brewCells += `<td style="padding:2px; border:1px solid var(--border); position:relative;">
-        <input type="number" data-wp="brew" value="${val || ''}" placeholder="0" min="0"
+        <input type="number" data-wp="brew" data-date="${d}" value="${val || ''}" placeholder="0" min="0"
           style="width:100%; padding:4px; font-size:12px; text-align:center; background:${generated?'rgba(16,185,129,.12)':'var(--surface2)'}; border:1px solid ${generated?'var(--accent2)':'var(--border)'}; border-radius:4px; color:var(--accent2); font-weight:600;"
-          oninput="wpRecalcRow('${sku}')"
-          onchange="wpBrewCellChanged(this, '${sku}', '${d}')"
+          oninput="wpRecalcRow(this)"
+          onchange="wpBrewCellChanged(this)"
           title="${generated ? 'Уже сформировано в производство' : ''}" />
         ${generated ? `<span class="wp-gen-mark" style="position:absolute; top:0; right:2px; font-size:9px; color:var(--accent2);" title="В производстве">✓</span>` : ''}
       </td>`;
@@ -5615,7 +5615,7 @@ function renderWeekPlan() {
 
     const finalStock = stock + brewTotal - needTotal;
 
-    html += `<tr data-sku="${sku}">
+    html += `<tr data-sku="${escapeHtml(String(sku))}">
       <td style="padding:8px 10px; border:1px solid var(--border); position:sticky; left:0; background:var(--surface); font-weight:600; white-space:nowrap;">
         <div>${r.name}</div>
         <div style="font-size:10px; color:var(--text3); margin-top:2px;">${r.brewHours||2}ч варки</div>
@@ -5625,8 +5625,8 @@ function renderWeekPlan() {
       <td style="padding:2px; border:1px solid var(--border); background:var(--surface2);">
         <input type="number" data-wp="stock" value="${stock || ''}" placeholder="0" min="0"
           style="width:100%; padding:4px; font-size:12px; text-align:center; background:var(--surface3); border:1px solid var(--border); border-radius:4px; font-weight:600;"
-          oninput="wpRecalcRow('${sku}')"
-          onchange="wpSetStock('${sku}', parseFloat(this.value)||0)" />
+          oninput="wpRecalcRow(this)"
+          onchange="wpStockChanged(this)" />
       </td>
       <td data-wp="needToBrew" style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:800; color:${needColor}; background:var(--surface2);">${needToBrew > 0 ? needToBrew : 0}${needToBrew <= 0 ? ' ✓' : ''}</td>
       ${brewCells}
@@ -5676,8 +5676,14 @@ function wpRenderGenerateSummary() {
 // фокус терялся и введённое число никуда не попадало.
 // Значения берём из полей, а не из state: во время набора state ещё не обновлён —
 // он пишется на onchange (wpSetDemand / wpSetStock / wpSetBrew).
-function wpRecalcRow(sku) {
-  const row = document.querySelector(`#wp-table tbody tr[data-sku="${sku}"]`);
+// Аргумент — само поле (this) либо, как запасной вариант, sku. Поиск по элементу
+// надёжнее: у старых импортированных рецептур sku может отсутствовать или
+// повторяться, и тогда поиск по data-sku нашёл бы только первую такую строку —
+// остальные молча перестали бы считаться.
+function wpRecalcRow(ref) {
+  const row = (ref && ref.nodeType)
+    ? ref.closest('tr')
+    : document.querySelector(`#wp-table tbody tr[data-sku="${ref}"]`);
   if (!row) return;
   const sum = sel => Array.from(row.querySelectorAll(sel))
     .reduce((acc, inp) => acc + (parseFloat(inp.value) || 0), 0);
@@ -5706,9 +5712,29 @@ function wpRecalcRow(sku) {
   }
 }
 
+// Обработчики записи. Продукт и клиента берём из data-атрибутов самого поля, а не
+// подставляем в текст обработчика: sanitizeUserText обезвреживает только < и >, и
+// клиент вроде `ТОО "Ромашка"` (кавычки в названии — обычное дело) разорвал бы
+// атрибут onchange, а с ним и разметку ячейки. В data-* значение экранировано
+// (escapeHtml), dataset отдаёт его обратно как есть.
+function wpRowSku(inp) {
+  const row = inp.closest('tr');
+  return row ? (row.dataset.sku || '') : '';
+}
+
+function wpDemandChanged(inp) {
+  wpSetDemand(wpRowSku(inp), inp.dataset.client, parseFloat(inp.value) || 0);
+}
+
+function wpStockChanged(inp) {
+  wpSetStock(wpRowSku(inp), parseFloat(inp.value) || 0, inp);
+}
+
 // Правка дневной ячейки снимает пометку «уже сформировано» (это делает wpSetBrew).
 // Раньше пометку убирала полная перерисовка — теперь гасим подсветку самой ячейки.
-function wpBrewCellChanged(inp, sku, dateIso) {
+function wpBrewCellChanged(inp) {
+  const sku = wpRowSku(inp);
+  const dateIso = inp.dataset.date;
   const wasGenerated = wpIsGenerated(sku, dateIso);
   wpSetBrew(sku, dateIso, parseFloat(inp.value) || 0);
   if (wasGenerated) {
@@ -5718,7 +5744,7 @@ function wpBrewCellChanged(inp, sku, dateIso) {
     const mark = inp.parentElement.querySelector('.wp-gen-mark');
     if (mark) mark.remove();
   }
-  wpRecalcRow(sku);
+  wpRecalcRow(inp);
   wpRenderGenerateSummary();
   renderWpHistory();
 }
@@ -5899,12 +5925,12 @@ function generateProductionFromWeekPlan() {
   }
 }
 
-function wpSetStock(sku, qty) {
+function wpSetStock(sku, qty, inp) {
   state.stockLevels[sku] = qty;
   saveState();
   // Точечно, без renderWeekPlan(): полная перерисовка на уходе фокуса пересоздаёт
   // все поля и «съедает» клик, которым пользователь переходит в следующую ячейку.
-  wpRecalcRow(sku);
+  wpRecalcRow(inp || sku);
 }
 
 function openSelectWpClientsModal() {
@@ -5913,7 +5939,7 @@ function openSelectWpClientsModal() {
     const checked = state.wpClients.includes(c);
     return `<div class="role-field-row">
       <span>${c}</span>
-      <div class="toggle ${checked?'on':''}" onclick="toggleWpClient('${c}', this)"></div>
+      <div class="toggle ${checked?'on':''}" data-client="${escapeHtml(c)}" onclick="toggleWpClient(this.dataset.client, this)"></div>
     </div>`;
   }).join('');
   document.getElementById('modal-wp-clients').classList.add('open');
@@ -5933,7 +5959,7 @@ function openSelectWpProductsModal() {
     const checked = r.activeInPlan !== false;
     return `<div class="role-field-row">
       <span>${r.name}</span>
-      <div class="toggle ${checked?'on':''}" onclick="toggleWpProductModal('${r.sku}', this)"></div>
+      <div class="toggle ${checked?'on':''}" data-sku="${escapeHtml(String(r.sku))}" onclick="toggleWpProductModal(this.dataset.sku, this)"></div>
     </div>`;
   }).join('');
   document.getElementById('modal-wp-products').classList.add('open');
