@@ -5584,9 +5584,10 @@ function renderWeekPlan() {
       const val = wpDemandFor(sku, c);
       needTotal += val;
       rowCells += `<td style="padding:2px; border:1px solid var(--border);">
-        <input type="number" value="${val || ''}" placeholder="0" min="0"
+        <input type="number" data-wp="demand" value="${val || ''}" placeholder="0" min="0"
           style="width:100%; padding:4px; font-size:12px; text-align:center; background:var(--surface2); border:1px solid var(--border); border-radius:4px;"
-          onchange="wpSetDemand('${sku}','${c}', parseFloat(this.value)||0); renderWeekPlan();" />
+          oninput="wpRecalcRow('${sku}')"
+          onchange="wpSetDemand('${sku}','${c}', parseFloat(this.value)||0)" />
       </td>`;
     });
 
@@ -5603,60 +5604,122 @@ function renderWeekPlan() {
       // после обнуления плана пустая ячейка не должна выглядеть как "сделанная"
       const generated = wpIsGenerated(sku, d) && val > 0;
       brewCells += `<td style="padding:2px; border:1px solid var(--border); position:relative;">
-        <input type="number" value="${val || ''}" placeholder="0" min="0"
+        <input type="number" data-wp="brew" value="${val || ''}" placeholder="0" min="0"
           style="width:100%; padding:4px; font-size:12px; text-align:center; background:${generated?'rgba(16,185,129,.12)':'var(--surface2)'}; border:1px solid ${generated?'var(--accent2)':'var(--border)'}; border-radius:4px; color:var(--accent2); font-weight:600;"
-          onchange="wpSetBrew('${sku}','${d}', parseFloat(this.value)||0); renderWeekPlan();"
+          oninput="wpRecalcRow('${sku}')"
+          onchange="wpBrewCellChanged(this, '${sku}', '${d}')"
           title="${generated ? 'Уже сформировано в производство' : ''}" />
-        ${generated ? `<span style="position:absolute; top:0; right:2px; font-size:9px; color:var(--accent2);" title="В производстве">✓</span>` : ''}
+        ${generated ? `<span class="wp-gen-mark" style="position:absolute; top:0; right:2px; font-size:9px; color:var(--accent2);" title="В производстве">✓</span>` : ''}
       </td>`;
     });
 
     const finalStock = stock + brewTotal - needTotal;
 
-    html += `<tr>
+    html += `<tr data-sku="${sku}">
       <td style="padding:8px 10px; border:1px solid var(--border); position:sticky; left:0; background:var(--surface); font-weight:600; white-space:nowrap;">
         <div>${r.name}</div>
         <div style="font-size:10px; color:var(--text3); margin-top:2px;">${r.brewHours||2}ч варки</div>
       </td>
       ${rowCells}
-      <td style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:700; background:var(--surface2);">${needTotal}</td>
+      <td data-wp="need" style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:700; background:var(--surface2);">${needTotal}</td>
       <td style="padding:2px; border:1px solid var(--border); background:var(--surface2);">
-        <input type="number" value="${stock || ''}" placeholder="0" min="0"
+        <input type="number" data-wp="stock" value="${stock || ''}" placeholder="0" min="0"
           style="width:100%; padding:4px; font-size:12px; text-align:center; background:var(--surface3); border:1px solid var(--border); border-radius:4px; font-weight:600;"
+          oninput="wpRecalcRow('${sku}')"
           onchange="wpSetStock('${sku}', parseFloat(this.value)||0)" />
       </td>
-      <td style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:800; color:${needColor}; background:var(--surface2);">${needToBrew > 0 ? needToBrew : 0}${needToBrew <= 0 ? ' ✓' : ''}</td>
+      <td data-wp="needToBrew" style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:800; color:${needColor}; background:var(--surface2);">${needToBrew > 0 ? needToBrew : 0}${needToBrew <= 0 ? ' ✓' : ''}</td>
       ${brewCells}
-      <td style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:700; color:var(--accent2); background:var(--surface2);">${brewTotal}</td>
-      <td style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:700; background:var(--surface2); color:${finalStock<0?'var(--danger)':'var(--text)'};">${finalStock}</td>
+      <td data-wp="brewTotal" style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:700; color:var(--accent2); background:var(--surface2);">${brewTotal}</td>
+      <td data-wp="finalStock" style="padding:6px; border:1px solid var(--border); text-align:center; font-weight:700; background:var(--surface2); color:${finalStock<0?'var(--danger)':'var(--text)'};">${finalStock}</td>
     </tr>`;
   });
 
   html += '</tbody>';
   table.innerHTML = html;
 
-  // ── сводка для кнопки генерации ──
-  const summaryEl = document.getElementById('wp-generate-summary');
-  if (summaryEl) {
-    let cellsToGenerate = 0, cellsAlreadyGenerated = 0;
-    activeRecipes.forEach(r => {
-      weekDays.forEach(d => {
-        const qty = wpBrewFor(r.sku, d);
-        if (qty > 0) {
-          if (wpIsGenerated(r.sku, d)) cellsAlreadyGenerated++;
-          else cellsToGenerate++;
-        }
-      });
-    });
-    if (cellsToGenerate === 0 && cellsAlreadyGenerated === 0) {
-      summaryEl.textContent = 'Распределите «надо сварить» по дням недели, затем сформируйте производство';
-    } else if (cellsToGenerate === 0) {
-      summaryEl.innerHTML = `<span style="color:var(--accent2);">✓ Весь план недели уже сформирован в производство (${cellsAlreadyGenerated} варок)</span>`;
-    } else {
-      summaryEl.innerHTML = `<span style="color:var(--warn); font-weight:600;">${cellsToGenerate} ${cellsToGenerate===1?'позиция':'позиций'} готовы к формированию</span>${cellsAlreadyGenerated ? ` · ${cellsAlreadyGenerated} уже в производстве` : ''}`;
-    }
-  }
+  wpRenderGenerateSummary();
+  renderWpHistory();
+}
 
+// ── сводка для кнопки генерации ──
+// Отдельно от таблицы: её нужно обновлять и при точечной правке дневной ячейки,
+// когда таблицу целиком мы намеренно не перерисовываем (см. wpRecalcRow).
+function wpRenderGenerateSummary() {
+  const summaryEl = document.getElementById('wp-generate-summary');
+  if (!summaryEl) return;
+  const weekDays = wpGetWeekDays();
+  let cellsToGenerate = 0, cellsAlreadyGenerated = 0;
+  state.recipes.filter(r => r.activeInPlan !== false).forEach(r => {
+    weekDays.forEach(d => {
+      const qty = wpBrewFor(r.sku, d);
+      if (qty > 0) {
+        if (wpIsGenerated(r.sku, d)) cellsAlreadyGenerated++;
+        else cellsToGenerate++;
+      }
+    });
+  });
+  if (cellsToGenerate === 0 && cellsAlreadyGenerated === 0) {
+    summaryEl.textContent = 'Распределите «надо сварить» по дням недели, затем сформируйте производство';
+  } else if (cellsToGenerate === 0) {
+    summaryEl.innerHTML = `<span style="color:var(--accent2);">✓ Весь план недели уже сформирован в производство (${cellsAlreadyGenerated} варок)</span>`;
+  } else {
+    summaryEl.innerHTML = `<span style="color:var(--warn); font-weight:600;">${cellsToGenerate} ${cellsToGenerate===1?'позиция':'позиций'} готовы к формированию</span>${cellsAlreadyGenerated ? ` · ${cellsAlreadyGenerated} уже в производстве` : ''}`;
+  }
+}
+
+// Пересчёт вычисляемых ячеек ОДНОЙ строки прямо во время набора (oninput), без
+// перерисовки таблицы. Раньше обработчики дёргали renderWeekPlan(), и это давало
+// два дефекта: «Надо сварить» пересчитывалось только после ухода фокуса, а сама
+// перерисовка пересоздавала все поля — клик, которым пользователь переходил в
+// соседнюю ячейку (например в «Остаток»), приходился по уже удалённому input,
+// фокус терялся и введённое число никуда не попадало.
+// Значения берём из полей, а не из state: во время набора state ещё не обновлён —
+// он пишется на onchange (wpSetDemand / wpSetStock / wpSetBrew).
+function wpRecalcRow(sku) {
+  const row = document.querySelector(`#wp-table tbody tr[data-sku="${sku}"]`);
+  if (!row) return;
+  const sum = sel => Array.from(row.querySelectorAll(sel))
+    .reduce((acc, inp) => acc + (parseFloat(inp.value) || 0), 0);
+
+  const needTotal = sum('input[data-wp="demand"]');
+  const brewTotal = sum('input[data-wp="brew"]');
+  const stockInp  = row.querySelector('input[data-wp="stock"]');
+  const stock     = stockInp ? (parseFloat(stockInp.value) || 0) : 0;
+  const needToBrew = needTotal - stock;
+  const finalStock = stock + brewTotal - needTotal;
+
+  const cell = name => row.querySelector(`td[data-wp="${name}"]`);
+  const needCell = cell('need');
+  if (needCell) needCell.textContent = needTotal;
+  const brewCell = cell('brewTotal');
+  if (brewCell) brewCell.textContent = brewTotal;
+  const needToBrewCell = cell('needToBrew');
+  if (needToBrewCell) {
+    needToBrewCell.textContent = (needToBrew > 0 ? needToBrew : 0) + (needToBrew <= 0 ? ' ✓' : '');
+    needToBrewCell.style.color = needToBrew > 0 ? 'var(--warn)' : 'var(--accent2)';
+  }
+  const finalCell = cell('finalStock');
+  if (finalCell) {
+    finalCell.textContent = finalStock;
+    finalCell.style.color = finalStock < 0 ? 'var(--danger)' : 'var(--text)';
+  }
+}
+
+// Правка дневной ячейки снимает пометку «уже сформировано» (это делает wpSetBrew).
+// Раньше пометку убирала полная перерисовка — теперь гасим подсветку самой ячейки.
+function wpBrewCellChanged(inp, sku, dateIso) {
+  const wasGenerated = wpIsGenerated(sku, dateIso);
+  wpSetBrew(sku, dateIso, parseFloat(inp.value) || 0);
+  if (wasGenerated) {
+    inp.style.background = 'var(--surface2)';
+    inp.style.borderColor = 'var(--border)';
+    inp.title = '';
+    const mark = inp.parentElement.querySelector('.wp-gen-mark');
+    if (mark) mark.remove();
+  }
+  wpRecalcRow(sku);
+  wpRenderGenerateSummary();
   renderWpHistory();
 }
 
@@ -5839,7 +5902,9 @@ function generateProductionFromWeekPlan() {
 function wpSetStock(sku, qty) {
   state.stockLevels[sku] = qty;
   saveState();
-  renderWeekPlan();
+  // Точечно, без renderWeekPlan(): полная перерисовка на уходе фокуса пересоздаёт
+  // все поля и «съедает» клик, которым пользователь переходит в следующую ячейку.
+  wpRecalcRow(sku);
 }
 
 function openSelectWpClientsModal() {
