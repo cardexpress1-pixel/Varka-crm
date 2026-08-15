@@ -9019,7 +9019,15 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
   // Локальный логин Manufacture в приоритете — синхронно, без сети.
   let restored = tryRestoreSession();
   let ssoPromise = null;
-  if (!restored) {
+  // SSO намеренно НЕ пробуем на цеховом терминале — тот же приём, что уже стоит
+  // в Tracker (js/app.js, init()). localStorage общий на весь varka.kz, поэтому
+  // если это устройство когда-либо открывало Портал, portal_token остаётся в нём
+  // и живёт 7 дней. Без этой проверки терминал при истёкшей сессии участка молча
+  // входил бы под ЧУЖОЙ портальной учёткой вместо формы участка, и человек у
+  // станка оказывался бы в системе с чужими правами. Для всех прочих устройств
+  // isShopTerminal() === false, условие сводится к прежнему — SSO работает как
+  // работало (2026-08-15).
+  if (!restored && !isShopTerminal()) {
     const portalToken = localStorage.getItem('portal_token');
     if (portalToken) {
       // Оптимистично: выставляем токен-кандидат СРАЗУ и запускаем loadState() с ним
