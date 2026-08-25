@@ -44,9 +44,9 @@
 | MFG-004 | Доступы/уровни (viewer/manager/admin), карта портал↔роль | identity-admin | да (`sso_role_map`, `roles`) | н/п | active | active |
 | MFG-005 | Выход (инвалидация токена) | auth | да (`sessions`, delete) | н/п | active | active |
 | MFG-006 | «Кто я» для SSO-сессий | auth | да (`roles`, read) | н/п | active | active |
-| MFG-007 | Синхронизация состояния (`app_state`), оптимистичная блокировка | state-sync | да (`app_state` + `roles` через sync) | н/п | active | active |
-| MFG-008 | Журнал действий (чтение/запись) | activity | да (`activity_log`) | н/п | active | active |
-| MFG-009 | Агрегаты для дашборда портала | reporting | да (`app_state`, read-only) | н/п | active | active |
+| MFG-007 | Синхронизация состояния (`app_state`), оптимистичная блокировка; лимит 100 запросов/мин на сессию реализован 2026-08-25 ([api/state.php:66-78](api/state.php#L66)) | state-sync | да (`app_state` + `roles` через sync) | н/п | active | active |
+| MFG-008 | Журнал действий (чтение/запись); лимит 100 запросов/мин на сессию реализован 2026-08-25 ([api/activity.php:22-29](api/activity.php#L22)) | activity | да (`activity_log`) | н/п | active | active |
+| MFG-009 | Агрегаты для дашборда портала; верхняя граница диапазона 400 дней реализована 2026-08-25 ([api/report.php:80-88](api/report.php#L80)) | reporting | да (`app_state`, read-only) | н/п | active | active |
 | MFG-010 | Брендинг — логотип компании | branding | нет (файловая система `uploads/`) | н/п | active | active |
 | MFG-011 | Health-check без авторизации | infra | да (`SELECT 1`) | н/п | active | active |
 | MFG-012 | Разовый CLI-импорт из Firestore-экспорта | infra | да (`app_state`, `activity_log`) | н/п | active | active |
@@ -139,6 +139,7 @@ UI-кодом как техдолгом, а не решение владельц
 | Версия | Дата | Что вошло |
 |---|---|---|
 | v1.0 | 2026-08-25 | Первая версия. 34 REQ-ID трассировано (33 из ТЗ v2.1 + новый MFG-034). Источник: диагностика Прохода А (7 классов дефектов методологии, находки по 2.1/2.2/2.4/2.7) + решения владельца Ш4 (статусы MFG-016/030/032/034, раздел «Открытые технические решения» перенесён из `tasks/todo.md` в ТЗ §5.2 и связан отсюда). |
+| v1.1 | 2026-08-25 | 02 Spec Audit Проход Б: описания MFG-007/008/009 дополнены фактом реализации лимитов (file:line), статус не менялся (был и остаётся `active` — ключевая функция всегда работала, лимиты были декларацией, теперь код). |
 
 ---
 
