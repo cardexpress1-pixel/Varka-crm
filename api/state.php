@@ -18,6 +18,21 @@ const STATE_KEYS_DROP_ALWAYS = ['requests', 'sheetsUrl'];
 const STATE_KEYS_DROP_SHOPFLOOR = ['recipes'];
 const SHOPFLOOR_ROLE_IDS = ['warshchik', 'intake'];
 
+// Продолжение фикса (2026-08-25, точная матрица потребителей по роли —
+// FINDING_orphaned_zayavki_page.md §6.6 + диагностика этой сессии,
+// ТЗ §5.2). В отличие от recipes выше, набор исключаемых ключей у каждой
+// роли свой — не сводится к одному общему списку для «цеха», поэтому
+// карта роль → ключи, а не ещё один STATE_KEYS_DROP_* + список ролей.
+// `batches` сюда намеренно не входит: warshchik/intake рендерят обзорную
+// панель по ВСЕМ реакторам/линиям сразу (index.html:6150-6167,
+// index.html:6440-6450) — им нужен близкий к полному массив, простым
+// исключением ключа не сузить (см. ТЗ §5.2).
+const STATE_KEYS_DROP_BY_ROLE = [
+    'warshchik' => ['clients', 'workdayHours', 'pouringLines'],
+    'intake'    => ['clients', 'workdayHours', 'reactors'],
+    'viewer'    => ['clients'],
+];
+
 // Вырезает ключи из уже готовой JSON-строки state перед отдачей клиенту.
 // Не трогает то, что пишется в БД (сохранение по-прежнему работает с
 // полным state) — только то, что уходит наружу в HTTP-ответе. Единая
@@ -29,6 +44,9 @@ function filterStateJsonForSession(string $json, array $session): string {
     foreach (STATE_KEYS_DROP_ALWAYS as $k) unset($data[$k]);
     if (in_array($session['role_id'] ?? null, SHOPFLOOR_ROLE_IDS, true)) {
         foreach (STATE_KEYS_DROP_SHOPFLOOR as $k) unset($data[$k]);
+    }
+    foreach (STATE_KEYS_DROP_BY_ROLE[$session['role_id'] ?? ''] ?? [] as $k) {
+        unset($data[$k]);
     }
     return json_encode($data, JSON_UNESCAPED_UNICODE);
 }
