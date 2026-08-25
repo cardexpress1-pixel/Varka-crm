@@ -77,6 +77,16 @@ $dateFrom = resolveDate((string)($_GET['from'] ?? ''), $realToday);
 $dateTo   = resolveDate((string)($_GET['to'] ?? ''), $realToday);
 if ($dateFrom > $dateTo) { [$dateFrom, $dateTo] = [$dateTo, $dateFrom]; }
 
+// Верхняя граница диапазона — 400 дней (решение владельца, аудит «День 0»,
+// реализовано 2026-08-25, ТЗ MFG-009). Явная ошибка, не тихое обрезание —
+// вызывающая сторона (портал) должна видеть, что диапазон отклонён.
+$daysSpan = (strtotime($dateTo) - strtotime($dateFrom)) / 86400;
+if ($daysSpan > 400) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Диапазон дат не может превышать 400 дней'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $periodBatches = array_values(array_filter($batches, function ($b) use ($dateFrom, $dateTo) {
     $status = $b['status'] ?? null;
     $brewDate = $b['brewDate'] ?? null;

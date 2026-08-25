@@ -63,6 +63,19 @@ if (sessionLevel($session) === 'viewer') {
     exit;
 }
 
+// Rate limit: 100 запросов/мин на сессию (не на IP — эндпоинт авторизованный,
+// ключ — bearer-токен сессии). Решение владельца (аудит «День 0»), реализовано
+// 2026-08-25 (ТЗ MFG-007). Переиспользует общий механизм rate_limit
+// (failedAttempts/recordFailure, api/storage.php:198-213) — изначально
+// написан для лимита неудачных попыток входа, здесь считает КАЖДЫЙ запрос
+// в бакете 'state-write', не только неудачные.
+if (failedAttempts('state-write', $session['token'], 60) >= 100) {
+    http_response_code(429);
+    echo json_encode(['error' => 'Слишком много запросов, попробуйте позже'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+recordFailure('state-write', $session['token']);
+
 $body = jsonBody();
 if (!isset($body['data']) || !is_array($body['data'])) {
     http_response_code(400); echo json_encode(['error' => 'data required']); exit;

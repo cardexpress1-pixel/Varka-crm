@@ -18,6 +18,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $session = requireAuth();
+
+// Rate limit: 100 запросов/мин на сессию — тот же принцип и механизм, что
+// MFG-007 (api/state.php), см. комментарий там. Реализовано 2026-08-25 (ТЗ MFG-008).
+if (failedAttempts('activity-write', $session['token'], 60) >= 100) {
+    http_response_code(429);
+    echo json_encode(['error' => 'Слишком много запросов, попробуйте позже'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+recordFailure('activity-write', $session['token']);
+
 $in = jsonBody();
 if (!$in) { http_response_code(400); echo json_encode(['error' => 'entry required']); exit; }
 
