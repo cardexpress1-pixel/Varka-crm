@@ -8,6 +8,31 @@ apiHeaders('GET, POST');
 $session = requireAuth();
 $db = pdo();
 
+// Фикс FINDING_orphaned_zayavki_page.md §6 (2026-08-25): ключи без легитимных
+// потребителей ни у одной роли — вырезаются из отдаваемого state для всех
+// сессий. Рецептуры дополнительно скрыты от цеховых терминалов: состав
+// партии уже денормализован в batch.ingredients в момент создания варки
+// (mkBatch()/calcIngredients() в index.html), сам шаблон рецептуры этим
+// ролям не показывается ни в одном экране (FINDING §6.3).
+const STATE_KEYS_DROP_ALWAYS = ['requests', 'sheetsUrl'];
+const STATE_KEYS_DROP_SHOPFLOOR = ['recipes'];
+const SHOPFLOOR_ROLE_IDS = ['warshchik', 'intake'];
+
+// Вырезает ключи из уже готовой JSON-строки state перед отдачей клиенту.
+// Не трогает то, что пишется в БД (сохранение по-прежнему работает с
+// полным state) — только то, что уходит наружу в HTTP-ответе. Единая
+// точка для обоих мест, где api/state.php отдаёт содержимое data целиком
+// (GET и POST-409), чтобы фильтр нельзя было обойти конфликтным POST'ом.
+function filterStateJsonForSession(string $json, array $session): string {
+    $data = json_decode($json, true);
+    if (!is_array($data)) return $json;
+    foreach (STATE_KEYS_DROP_ALWAYS as $k) unset($data[$k]);
+    if (in_array($session['role_id'] ?? null, SHOPFLOOR_ROLE_IDS, true)) {
+        foreach (STATE_KEYS_DROP_SHOPFLOOR as $k) unset($data[$k]);
+    }
+    return json_encode($data, JSON_UNESCAPED_UNICODE);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $row = $db->query('SELECT data, rev FROM app_state WHERE id = 1')->fetch();
     if (!$row) { echo '{"rev":0,"data":null}'; exit; }
@@ -19,8 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         echo '{"rev":' . (int)$row['rev'] . ',"unchanged":true}';
         exit;
     }
-    // data — уже готовая JSON-строка, вклеиваем без повторного кодирования.
-    echo '{"rev":' . (int)$row['rev'] . ',"data":' . $row['data'] . '}';
+    // data — готовая JSON-строка из БД; фильтруется по роли сессии перед отдачей.
+    echo '{"rev":' . (int)$row['rev'] . ',"data":' . filterStateJsonForSession($row['data'], $session) . '}';
     exit;
 }
 
@@ -58,7 +83,7 @@ try {
     if ($row && $baseRev !== $currentRev) {
         $db->rollBack();
         http_response_code(409);
-        echo '{"error":"conflict","rev":' . (int)$row['rev'] . ',"data":' . $row['data'] . '}';
+        echo '{"error":"conflict","rev":' . (int)$row['rev'] . ',"data":' . filterStateJsonForSession($row['data'], $session) . '}';
         exit;
     }
 
