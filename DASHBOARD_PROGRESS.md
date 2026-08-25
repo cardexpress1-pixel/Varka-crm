@@ -3,8 +3,10 @@
 > Читать в начале новой сессии. ТЗ: `C:/Users/Lenovo/OneDrive/Desktop/ТЗ_Дашборд_ВарКа_CRM.md`
 
 ## Где работаем / как деплоим
-- **Источник истины — ЭТОТ репозиторий:** `C:/Users/Lenovo/OneDrive/Desktop/CRM/проект VarKa`
-  (remote `origin` = github.com/cardexpress1-pixel/Varka-crm, ветка `main`, хостинг **GitHub Pages** → cardexpress1-pixel.github.io/Varka-crm/).
+- **Источник истины — ЭТОТ репозиторий:** `C:\dev\varka\Project_Manufacture`
+  (перенесено сюда 2026-07-30, история сохранена). Остальное на этой странице —
+  архивное состояние на 2026-07-04 (ветка `main`, GitHub Pages); актуальные
+  ветка/хостинг/деплой — в `CLAUDE.md`, раздел «3. Constraint'ы».
 - `Desktop/VarKa` — устаревшая пустая копия, НЕ трогать.
 - Деплой: правка `index.html` → commit → **`git push origin main` ТОЛЬКО с явного «go» пользователя**, перед пушем показать git status/diff.
 - Правила проекта — в `CLAUDE.md`, безопасность — в `SECURITY.md`.
