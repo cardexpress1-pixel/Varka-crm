@@ -3062,7 +3062,7 @@ function localStateJson() {
 // Пароли не трогаем (могут содержать любые символы и никогда не рендерятся).
 function sanitizeStateUserText() {
   const sT = sanitizeUserText;
-  (state.batches || []).forEach(b => { if (b) { b.name = sT(b.name); b.note = sT(b.note); b.client = sT(b.client); } });
+  (state.batches || []).forEach(b => { if (b) { b.name = sT(b.name); b.note = sT(b.note); b.client = sT(b.client); b.commentForWarshchik = sT(b.commentForWarshchik); b.commentForPouring = sT(b.commentForPouring); b.deleteReason = sT(b.deleteReason); } });
   (state.requests || []).forEach(r => { if (r) { r.name = sT(r.name); r.client = sT(r.client); r.note = sT(r.note); } });
   if (Array.isArray(state.clients)) state.clients = state.clients.map(sT);
   if (Array.isArray(state.wpClients)) state.wpClients = state.wpClients.map(sT);
@@ -5342,7 +5342,7 @@ function pmAssignedCard(b) {
           <span>Оператор варки: <strong>${brewName}</strong></span>
           ${b.pouringLine ? `<span>${b.pouringLine}</span>` : ''}
         </div>
-        ${b.commentForWarshchik ? `<div class="note" style="margin-top:6px;">📝 Варщику: ${b.commentForWarshchik}</div>` : ''}
+        ${b.commentForWarshchik ? `<div class="note" style="margin-top:6px;">📝 Варщику: ${escapeHtml(b.commentForWarshchik)}</div>` : ''}
       </div>
       <span style="flex-shrink:0; font-size:12px; font-weight:700; color:var(--warn); padding:3px 10px; border-radius:10px; background:var(--warn-bg, rgba(220,80,40,.12));">Ждёт старта</span>
     </div>
@@ -5448,7 +5448,7 @@ function pmMonitorCard(b) {
       <span>${b.status==='active' ? `Варится · ${pct}%` : 'Ждёт очереди на реактор'}</span>
       ${b.pouringLine ? `<span>${b.pouringLine}</span>` : ''}
       ${assignedRole ? `<span>${assignedRole.login}</span>` : ''}
-      ${b.commentForWarshchik ? `<span>📝 ${b.commentForWarshchik}</span>` : ''}
+      ${b.commentForWarshchik ? `<span>📝 ${escapeHtml(b.commentForWarshchik)}</span>` : ''}
     </div>`;
   } else if (stage === 'brewed') {
     extra = `<div class="batch-meta" style="margin-top:6px;"><span>${b.pouringLine ? `Линия: ${b.pouringLine}` : '<span style="color:var(--warn)">Линия не назначена</span>'}</span></div>`;
@@ -5458,7 +5458,7 @@ function pmMonitorCard(b) {
       <span>${fmtDateHuman(b.pouringDate||b.brewDate)}</span>
       ${b.pouringOperatorName ? `<span>${b.pouringOperatorName}</span>` : ''}
       ${b.pouringStartedAt ? `<span>Начат: ${new Date(b.pouringStartedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</span>` : ''}
-      ${b.commentForPouring ? `<span>📝 ${b.commentForPouring}</span>` : ''}
+      ${b.commentForPouring ? `<span>📝 ${escapeHtml(b.commentForPouring)}</span>` : ''}
     </div>`;
   } else if (stage === 'poured') {
     extra = `<div class="batch-meta" style="margin-top:6px;">
@@ -6534,7 +6534,7 @@ function renderIntake() {
             ${b.pouringStartedAt ? `<span>Начат: ${new Date(b.pouringStartedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</span>` : ''}
             ${pouringDone ? `<span>Завершён: ${new Date(b.pouringEndedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})} · Заняло: ${formatDuration(new Date(b.pouringEndedAt) - new Date(b.pouringStartedAt))}</span>` : ''}
           </div>
-          ${b.commentForPouring ? `<div class="note" style="margin-top:6px; border-color:var(--accent);">💬 Комментарий от главного оператора: ${b.commentForPouring}</div>` : ''}
+          ${b.commentForPouring ? `<div class="note" style="margin-top:6px; border-color:var(--accent);">💬 Комментарий от главного оператора: ${escapeHtml(b.commentForPouring)}</div>` : ''}
         </div>
         <div style="flex-shrink:0;">${actionHtml}</div>
       </div>
@@ -6683,7 +6683,7 @@ function renderPouringDetail(b) {
         ${b.pouringStartedAt ? `<div class="detail-meta-item">Начат: <span>${new Date(b.pouringStartedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</span></div>` : ''}
         ${ended ? `<div class="detail-meta-item">Завершён: <span>${new Date(b.pouringEndedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</span></div>` : ''}
       </div>
-      ${b.commentForPouring ? `<div class="note" style="margin-top:8px; border-color:var(--accent);">💬 Комментарий от главного оператора: ${b.commentForPouring}</div>` : ''}
+      ${b.commentForPouring ? `<div class="note" style="margin-top:8px; border-color:var(--accent);">💬 Комментарий от главного оператора: ${escapeHtml(b.commentForPouring)}</div>` : ''}
       <div class="brewop-card-status-row" style="margin-top:10px;">
         <span class="status-dot-ind status-dot-${st.color}"></span>
         <span class="brewop-slabel">${st.text}</span>
@@ -7302,7 +7302,7 @@ function renderJournal() {
             ${dev !== null ? `<div><div style="font-size:11px;color:var(--text2);">ОТКЛ.</div><div style="font-size:18px; font-weight:800; color:${devColor};">${dev > 0 ? '+' : ''}${dev}%</div></div>` : ''}
           </div>` : `<div class="note note-danger" style="margin-top:8px;">
             <strong>Удалено</strong> (был статус: ${statusLabel(b.deletedStatusBefore || '—')}) · ${b.deletedByRole || ''} · ${b.deletedAt ? new Date(b.deletedAt).toLocaleString('ru-RU') : ''}<br>
-            Причина: ${b.deleteReason || '—'}
+            Причина: ${escapeHtml(b.deleteReason || '—')}
           </div>`}
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0;">
@@ -8643,7 +8643,7 @@ function renderZakladkaDetail(b) {
         ${fields.client && b.requestId ? `<div class="detail-meta-item">Заявка: <span>${b.requestId}</span></div>` : ''}
       </div>
       ${fields.note && b.note ? `<div class="note" style="margin-top:8px;">📝 ${b.note}</div>` : ''}
-      ${b.commentForWarshchik ? `<div class="note" style="margin-top:8px; border-color:var(--accent);">💬 Комментарий от главного оператора: ${b.commentForWarshchik}</div>` : ''}
+      ${b.commentForWarshchik ? `<div class="note" style="margin-top:8px; border-color:var(--accent);">💬 Комментарий от главного оператора: ${escapeHtml(b.commentForWarshchik)}</div>` : ''}
       <div class="progress-bar-wrap">
         <div class="progress-bar" style="width:${pct}%"></div>
       </div>
