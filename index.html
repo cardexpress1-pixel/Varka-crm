@@ -2036,7 +2036,7 @@ body.theme-light #page-dashboard .dash-pulse-cell{box-shadow:0 1px 3px rgba(20,3
       <div id="roles-list" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;"></div>
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border);">
         <button class="btn btn-ghost btn-sm" onclick="confirmResetRolesToDefault()">Сбросить все роли к стандартным</button>
-        <div class="field-hidden-note" style="margin-top:4px;">Удалит все созданные роли и вернёт исходные admin/operator/warshchik/intake со стандартными паролями.</div>
+        <div class="field-hidden-note" style="margin-top:4px;">Удалит все созданные роли и вернёт исходные admin/operator/warshchik/intake с новыми случайными паролями (сервер сгенерирует и покажет один раз).</div>
       </div>
     </div>
   </div>
@@ -2567,21 +2567,23 @@ const CONFIGURABLE_FIELDS = [
   ['dateNavIntake', 'Отображать дату'],
 ];
 
-// Аудит безопасности — быстрая мера (не архитектурный фикс, см. SECURITY.md «Этап 2»):
-// дефолтные пароли больше не совпадают с логином. Применяется только к НОВЫМ ролям /
-// сбросу через «Сбросить роли к стандартным» — существующие роли в боевой БД не меняет.
+// Security-фикс (2026-08-27): пароли ролей больше НЕ хардкодятся в клиентском
+// коде вообще — раньше здесь лежали фиксированные пароли, читаемые через "просмотр
+// кода страницы" ДО входа. Структура ролей (id/login/tabs/fields) без пароля — не
+// секрет, менять её нечем. Новый пароль при сбросе генерирует сервер, см.
+// resetRolePassword() и api/reset_role_password.php.
 function defaultRoles() {
   return [
-    { id:'admin', name:'Админ', login:'admin', password:'ZLFGd6EN',
+    { id:'admin', name:'Админ', login:'admin',
       tabs: ALL_TABS.map(t=>t[0]),
       fields: { client:true, note:true, priority:true } },
-    { id:'operator', name:'Оператор производства', login:'operator', password:'PZft746E',
+    { id:'operator', name:'Оператор производства', login:'operator',
       tabs: ['dashboard','production','weekplan','calendar','reports','journal'],
       fields: { client:true, note:true, priority:true } },
-    { id:'warshchik', name:'Участок варки', login:'warshchik', password:'wUsyGPim',
+    { id:'warshchik', name:'Участок варки', login:'warshchik',
       tabs: ['warshchik'],
       fields: { client:false, note:true, priority:true, dateNavWarshchik:true, dateNavIntake:true } },
-    { id:'intake', name:'Участок розлива', login:'intake', password:'cwr69UQD',
+    { id:'intake', name:'Участок розлива', login:'intake',
       tabs: ['intake'],
       fields: { client:false, note:true, priority:false, dateNavWarshchik:true, dateNavIntake:true } },
   ];
@@ -2652,11 +2654,14 @@ function applyStateMigrations() {
     if (state.passwords) {
       // есть старые данные — переносим их в новую структуру, не теряя пароли пользователя
       const legacyWarshchikFields = { client:false, note:true, priority:true, dateNavWarshchik:true, dateNavIntake:true, ...(state.roleFields && state.roleFields.warshchik) };
+      // Security-фикс (2026-08-27): фолбэк-пароль вида "логин=пароль" убран —
+      // если state.passwords.* пуст, роль остаётся без пароля (сервер не пускает
+      // с пустым password_hash), а не с предсказуемым значением.
       state.roles = [
-        { id:'admin', name:'Админ', login:'admin', password: state.passwords.admin || 'admin', tabs: ALL_TABS.map(t=>t[0]), fields: { client:true, note:true, priority:true } },
-        { id:'operator', name:'Оператор производства', login:'operator', password: state.passwords.operator || 'operator', tabs: ['dashboard','weekplan','calendar','journal'], fields: { client:true, note:true, priority:true } },
-        { id:'warshchik', name:'Участок варки', login:'warshchik', password: state.passwords.warshchik || 'warshchik', tabs: ['warshchik'], fields: legacyWarshchikFields },
-        { id:'intake', name:'Участок розлива', login:'intake', password: state.passwords.intake || 'intake', tabs: ['intake'], fields: { client:false, note:true, priority:false, dateNavWarshchik:true, dateNavIntake:true } },
+        { id:'admin', name:'Админ', login:'admin', password: state.passwords.admin || '', tabs: ALL_TABS.map(t=>t[0]), fields: { client:true, note:true, priority:true } },
+        { id:'operator', name:'Оператор производства', login:'operator', password: state.passwords.operator || '', tabs: ['dashboard','weekplan','calendar','journal'], fields: { client:true, note:true, priority:true } },
+        { id:'warshchik', name:'Участок варки', login:'warshchik', password: state.passwords.warshchik || '', tabs: ['warshchik'], fields: legacyWarshchikFields },
+        { id:'intake', name:'Участок розлива', login:'intake', password: state.passwords.intake || '', tabs: ['intake'], fields: { client:false, note:true, priority:false, dateNavWarshchik:true, dateNavIntake:true } },
       ];
       delete state.passwords;
       delete state.roleFields;
@@ -2667,7 +2672,9 @@ function applyStateMigrations() {
 
   // ── Миграция: добавляем роль «Участок розлива», если она ещё не существует ──
   if (!state.roles.find(r => r.tabs && r.tabs.length === 1 && r.tabs[0] === 'intake')) {
-    state.roles.push({ id:'intake', name:'Участок розлива', login:'intake', password:'intake', tabs: ['intake'], fields: { client:false, note:true, priority:false, dateNavWarshchik:true, dateNavIntake:true } });
+    // Security-фикс (2026-08-27): было password:'intake' (логин=пароль) — убрано,
+    // роль создаётся без пароля, реальный задаётся через сброс/админку.
+    state.roles.push({ id:'intake', name:'Участок розлива', login:'intake', password:'', tabs: ['intake'], fields: { client:false, note:true, priority:false, dateNavWarshchik:true, dateNavIntake:true } });
   }
 
   // ── Переименование уже существующих ролей под новые названия ──
@@ -3528,13 +3535,34 @@ async function doLogin() {
   setupFirestoreSync();
 }
 
-function confirmResetRolesToDefault() {
-  const ok = confirm('Сбросить все роли к стандартным? Все созданные вручную роли будут удалены, пароли admin/operator/warshchik/intake вернутся к значениям по умолчанию.');
+// Security-фикс (2026-08-27): раньше сброс ставил фиксированные пароли из
+// defaultRoles(), теперь каждой из 4 стандартных ролей сервер генерирует новый
+// случайный пароль в момент нажатия (api/reset_role_password.php) — показывается
+// администратору один раз, нигде не хранится и не хардкодится.
+// Структурный сброс (state.roles = defaultRoles(); saveState()) и генерация
+// паролей — два независимых запроса, не связаны колбэком saveState(): у неё общий
+// на всё приложение debounce-таймер (saveState._t), параллельный вызов saveState()
+// из другого места мог бы отменить именно этот колбэк и «потерять» шаг генерации.
+async function confirmResetRolesToDefault() {
+  const ok = confirm('Сбросить все роли к стандартным? Все созданные вручную роли будут удалены. Для admin/operator/warshchik/intake сервер сгенерирует новые пароли — они будут показаны один раз, запишите их сразу.');
   if (!ok) return;
   state.roles = defaultRoles();
   saveState();
   renderRolesList();
-  showToast('Роли сброшены к стандартным значениям');
+
+  const ids = ['admin', 'operator', 'warshchik', 'intake'];
+  const lines = [];
+  for (const id of ids) {
+    try {
+      const res = await apiFetch('/reset-role-password', { method: 'POST', body: JSON.stringify({ role_id: id }) });
+      const j = await res.json();
+      lines.push(res.ok ? `${id}: ${j.password}` : `${id}: ОШИБКА (${j.error || res.status})`);
+    } catch (e) {
+      lines.push(`${id}: ОШИБКА (нет связи с сервером)`);
+    }
+  }
+  alert('Новые пароли (показываются один раз, запишите и передайте сотрудникам):\n\n' + lines.join('\n'));
+  showToast('Роли сброшены, пароли сгенерированы');
 }
 
 let _loggingOut = false; // подавляет ложное «Сессия истекла» при штатном выходе
