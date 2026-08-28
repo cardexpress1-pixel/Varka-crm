@@ -40,7 +40,16 @@ $q = pdo()->prepare("SELECT * FROM roles WHERE login = ? AND status = 'active'")
 $q->execute([$login]);
 $role = $q->fetch();
 
-if (!$role || $role['password_hash'] === '' || !password_verify($password, $role['password_hash'])) {
+// Фиктивный bcrypt того же cost, что и боевые хэши (PASSWORD_BCRYPT без явного
+// cost — по умолчанию 10): password_verify() выполняется БЕЗУСЛОВНО, даже когда
+// роли нет. Раньше `||` замыкался на !$role и bcrypt не считался вовсе — время
+// ответа отличало существующий логин от несуществующего (03_SECURITY фикс 3,
+// 28.08.2026, по образцу Tracker/Baze).
+const DUMMY_PASSWORD_HASH = '$2y$10$q1/pKBjiuqoC6Wy4fJJR1eVQl8IdplLykgd/9azkEQCApwiJGz10K';
+$hashToCheck = ($role && $role['password_hash'] !== '') ? $role['password_hash'] : DUMMY_PASSWORD_HASH;
+$passwordOk = password_verify($password, $hashToCheck);
+
+if (!$role || $role['password_hash'] === '' || !$passwordOk) {
     logLoginAttempt($login, false);
     recordFailure('login', clientIp());
     recordFailure('login_account', $loginKey);
