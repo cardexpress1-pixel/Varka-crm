@@ -87,12 +87,12 @@ if (sessionLevel($session) === 'viewer') {
 // (failedAttempts/recordFailure, api/storage.php:198-213) — изначально
 // написан для лимита неудачных попыток входа, здесь считает КАЖДЫЙ запрос
 // в бакете 'state-write', не только неудачные.
-if (failedAttempts('state-write', $session['token'], 60) >= 100) {
+if (failedAttempts('state-write', $session['token_hash'], 60) >= 100) {
     http_response_code(429);
     echo json_encode(['error' => 'Слишком много запросов, попробуйте позже'], JSON_UNESCAPED_UNICODE);
     exit;
 }
-recordFailure('state-write', $session['token']);
+recordFailure('state-write', $session['token_hash']);
 
 $body = jsonBody();
 if (!isset($body['data']) || !is_array($body['data'])) {

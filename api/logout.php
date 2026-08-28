@@ -7,6 +7,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 $token = bearerToken();
 if ($token !== '' && strlen($token) <= 64) {
-    pdo()->prepare('DELETE FROM sessions WHERE token = ?')->execute([$token]);
+    pdo()->prepare('DELETE FROM sessions WHERE token_hash = ?')->execute([hash('sha256', $token)]);
 }
 echo json_encode(['ok' => true]);

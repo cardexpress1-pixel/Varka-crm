@@ -26,8 +26,65 @@ function pdo(): PDO {
         ensureViewerRole($pdo);
         ensureSsoRoleMapTable($pdo);
         ensureSsoLevelColumn($pdo);
+        ensureSessionTokenHash($pdo);
+        ensurePortalCacheTokenHash($pdo);
     }
     return $pdo;
+}
+
+// sessions.token хранился и сверялся открытым текстом (PRIMARY KEY) — переименование
+// колонки в token_hash служит и миграцией, и меткой «сделано» разом (тот же приём,
+// что уже применён в Kanban/Portal/Approval): выполняется ровно один раз (после
+// переименования колонка token_hash уже существует, проверка ниже больше не
+// сработает), а bootstrapSchema() для НОВОГО развёртывания создаёт token_hash сразу —
+// там колонки token никогда не было, и этот блок для такой базы не делает ничего.
+//
+// UPDATE ниже превращает каждую уже лежавшую строку в SHA2 ЕЁ ЖЕ старого значения —
+// не бэкфилл по внешним данным. Активные сессии цеховых терминалов не рвутся:
+// предъявленный клиентом токен хэшируется тем же sha256 при сверке
+// (currentSession()), и результат совпадает со значением, которое здесь получилось
+// из уже выданного токена.
+function ensureSessionTokenHash(PDO $pdo): void {
+    $flag = __DIR__ . '/.sessiontokenhash_ok';
+    if (file_exists($flag)) return;
+    $stmt = $pdo->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sessions' AND COLUMN_NAME = 'token_hash'"
+    );
+    $stmt->execute();
+    if ((int) $stmt->fetchColumn() === 0) {
+        $pdo->exec('ALTER TABLE sessions CHANGE token token_hash CHAR(64) NOT NULL');
+        $pdo->exec('UPDATE sessions SET token_hash = SHA2(token_hash, 256)');
+    }
+    file_put_contents($flag, date('c'));
+}
+
+// Тот же приём для portal_verify_cache (кэш ответов /api/verify портала — тоже
+// хранил сырой токен как PRIMARY KEY). Таблицу создаёт verifyPortalToken() лениво,
+// при первом SSO-входе — на свежей установке, где её ещё нет вовсе, мигрировать
+// нечего: CREATE TABLE IF NOT EXISTS там уже определяет token_hash напрямую.
+function ensurePortalCacheTokenHash(PDO $pdo): void {
+    $flag = __DIR__ . '/.portalcachehash_ok';
+    if (file_exists($flag)) return;
+    $stmt = $pdo->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'portal_verify_cache' AND COLUMN_NAME = 'token'"
+    );
+    $stmt->execute();
+    if ((int) $stmt->fetchColumn() > 0) {
+        $pdo->exec('ALTER TABLE portal_verify_cache CHANGE token token_hash VARCHAR(64) NOT NULL');
+        // Не бэкфиллим значения SHA2 от старого сырого токена — просто чистим кэш
+        // целиком. Это не сессия (реальные — в sessions, мигрируют выше с
+        // сохранением значений): это TTL=60 сек кэш ответа портала, пересоздаётся
+        // сам на следующей проверке. Если сохранить старые строки, часть из них ещё
+        // минуту хранила бы session_json в старом виде (с ключом 'token' вместо
+        // 'token_hash' внутри), и уже вошедший в эту минуту сотрудник получил бы
+        // сбой на первом же POST после развёртывания — цена именно того бага,
+        // который фиксит этот коммит, но в другом месте. Очистка стоит не дороже
+        // одного лишнего похода в портал на человека, попавшего в это окно.
+        $pdo->exec('DELETE FROM portal_verify_cache');
+    }
+    file_put_contents($flag, date('c'));
 }
 
 // Уровень доступа сотрудника портала (2026-07-25, единое понятие доступов).
@@ -139,8 +196,13 @@ function bootstrapSchema(PDO $pdo): void {
         UNIQUE KEY uq_login (login)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    // token_hash — sha256 сырого токена, не сам токен (03_SECURITY фикс 2,
+    // 28.08.2026). Для баз, развёрнутых до этого изменения, переименование
+    // PRIMARY KEY token → token_hash с преобразованием значений — в
+    // ensureSessionTokenHash() ниже, не здесь: новому развёртыванию сразу
+    // нужна целевая колонка, а не ALTER пустой таблицы.
     $pdo->exec("CREATE TABLE IF NOT EXISTS sessions (
-        token CHAR(64) NOT NULL PRIMARY KEY,
+        token_hash CHAR(64) NOT NULL PRIMARY KEY,
         role_id VARCHAR(64) NOT NULL,
         login VARCHAR(64) NOT NULL,
         is_admin TINYINT(1) NOT NULL DEFAULT 0,
@@ -279,9 +341,11 @@ function createSession(array $role): string {
     $db = pdo();
     $db->prepare('DELETE FROM sessions WHERE expires_at < ?')->execute([time()]);
     $token = bin2hex(random_bytes(32));
-    $db->prepare('INSERT INTO sessions (token, role_id, login, is_admin, expires_at)
+    $db->prepare('INSERT INTO sessions (token_hash, role_id, login, is_admin, expires_at)
                   VALUES (?, ?, ?, ?, ?)')
-       ->execute([$token, $role['id'], $role['login'], (int)$role['is_admin'],
+       // В базу — только хэш (03_SECURITY фикс 2): сырой токен возвращается
+       // вызывающему и уходит клиенту, в БД он не попадает никогда.
+       ->execute([hash('sha256', $token), $role['id'], $role['login'], (int)$role['is_admin'],
                   time() + 60 * 60 * 12]);
     return $token;
 }
@@ -300,9 +364,9 @@ function bearerToken(): string {
 function currentSession(): ?array {
     $token = bearerToken();
     if ($token === '' || strlen($token) > 64) return null;
-    $q = pdo()->prepare('SELECT token, role_id, login, is_admin, expires_at
-                         FROM sessions WHERE token = ?');
-    $q->execute([$token]);
+    $q = pdo()->prepare('SELECT token_hash, role_id, login, is_admin, expires_at
+                         FROM sessions WHERE token_hash = ?');
+    $q->execute([hash('sha256', $token)]);
     $s = $q->fetch();
     if ($s && (int)$s['expires_at'] >= time()) return $s;
     return verifyPortalToken($token);
@@ -326,17 +390,19 @@ function currentSession(): ?array {
 // TTL 60 сек, чтобы не бить по сети на каждый запрос.
 function verifyPortalToken(string $token): ?array {
     $db = pdo();
+    // token_hash — sha256 портального токена, не сам токен (03_SECURITY фикс 2).
     $db->exec("CREATE TABLE IF NOT EXISTS portal_verify_cache (
-        token VARCHAR(64) PRIMARY KEY,
+        token_hash VARCHAR(64) PRIMARY KEY,
         session_json TEXT NOT NULL,
         expires_at INT UNSIGNED NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     $now = time();
+    $tokenHash = hash('sha256', $token);
     $db->prepare('DELETE FROM portal_verify_cache WHERE expires_at < ?')->execute([$now]);
 
-    $q = $db->prepare('SELECT session_json FROM portal_verify_cache WHERE token = ?');
-    $q->execute([$token]);
+    $q = $db->prepare('SELECT session_json FROM portal_verify_cache WHERE token_hash = ?');
+    $q->execute([$tokenHash]);
     $row = $q->fetch();
     if ($row) {
         return json_decode($row['session_json'], true) ?: null;
@@ -459,7 +525,11 @@ function verifyPortalToken(string $token): ?array {
             }
 
             $session = [
-                'token'      => $token,
+                // Хэш, не сам токен (03_SECURITY фикс 2): используется дальше только
+                // как ключ per-сессионного rate limit (activity.php/state.php) — для
+                // этого годится в равной мере, а сырому токену в JSON-блобе кэша не
+                // место, как и в PRIMARY KEY выше.
+                'token_hash' => $tokenHash,
                 'role_id'    => $roleId,
                 'login'      => $login,
                 'name'       => $name,
@@ -474,9 +544,9 @@ function verifyPortalToken(string $token): ?array {
 
     // Кэшируем и отрицательный результат — иначе невалидный/недостаточный
     // токен будет бить по сети на каждый запрос.
-    $db->prepare('INSERT INTO portal_verify_cache (token, session_json, expires_at) VALUES (?, ?, ?)
+    $db->prepare('INSERT INTO portal_verify_cache (token_hash, session_json, expires_at) VALUES (?, ?, ?)
                   ON DUPLICATE KEY UPDATE session_json = VALUES(session_json), expires_at = VALUES(expires_at)')
-       ->execute([$token, json_encode($session), $now + 60]);
+       ->execute([$tokenHash, json_encode($session), $now + 60]);
 
     return $session;
 }
