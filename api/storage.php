@@ -191,8 +191,33 @@ function jsonBody(): array {
     return is_array($data) ? $data : [];
 }
 
+// Приватный, loopback или иной служебный адрес — не настоящий адрес клиента.
+function isProxyAddr(string $ip): bool {
+    return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+}
+
+// Реальный IP клиента (03_SECURITY фикс 1, 28.08.2026). Раньше отдавался голый
+// REMOTE_ADDR: за reverse proxy платформы это адрес самого прокси, один и тот же
+// у всех — а clientIp() отвечает за ключ rate limit'а входа (см. auth.php), так
+// что общий IP означал бы общий на всех лимит попыток. По образцу Portal/Kaspi/
+// Tracker/Sales/Baze: X-Forwarded-For читаем ТОЛЬКО когда REMOTE_ADDR сам
+// приватный/loopback, и берём справа налево первый публичный адрес в цепочке —
+// то, что дописал ближайший прокси, а не то, что подставил сам клиент слева.
 function clientIp(): string {
-    return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $remote = $_SERVER['REMOTE_ADDR'] ?? '';
+    if ($remote !== '' && !isProxyAddr($remote)) {
+        return $remote;
+    }
+
+    $chain = array_reverse(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+    foreach ($chain as $candidate) {
+        $candidate = trim($candidate);
+        if ($candidate !== '' && !isProxyAddr($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return $remote !== '' ? $remote : 'unknown';
 }
 
 // Читает число неудачных попыток в окне БЕЗ записи новой (успешные входы не

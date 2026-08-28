@@ -24,6 +24,18 @@ if (failedAttempts('login', clientIp(), 900) >= 10) {
     exit;
 }
 
+// Второй, независимый лимит — по логину (03_SECURITY фикс 1, 28.08.2026): лимит
+// по IP выше не тормозит подбор пароля к ОДНОЙ учётке с разных адресов. Тот же
+// принцип двойного лимита, что у портала varka.kz (IP и email — раздельные
+// бакеты) и уже применён в Baze (там наоборот, IP добавляли к учётному). Значения
+// те же, что у уже действующего IP-лимита — отдельная причина, не отдельная цифра.
+$loginKey = mb_strtolower($login);
+if (failedAttempts('login_account', $loginKey, 900) >= 10) {
+    http_response_code(429);
+    echo json_encode(['error' => 'Слишком много неудачных попыток входа, попробуйте позже']);
+    exit;
+}
+
 $q = pdo()->prepare("SELECT * FROM roles WHERE login = ? AND status = 'active'");
 $q->execute([$login]);
 $role = $q->fetch();
@@ -31,6 +43,7 @@ $role = $q->fetch();
 if (!$role || $role['password_hash'] === '' || !password_verify($password, $role['password_hash'])) {
     logLoginAttempt($login, false);
     recordFailure('login', clientIp());
+    recordFailure('login_account', $loginKey);
     http_response_code(401);
     echo json_encode(['error' => 'Неверный логин или пароль']);
     exit;
